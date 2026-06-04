@@ -137,6 +137,22 @@ export function parseMarkdownToBlocks(markdown: string): ParsedBlock[] {
       continue;
     }
 
+    if (line.startsWith('|')) {
+      const tableLines: string[] = [line];
+      i++;
+      while (i < lines.length && lines[i].startsWith('|')) {
+        tableLines.push(lines[i]);
+        i++;
+      }
+      blocks.push({
+        id: nextBlockId(),
+        type: 'table',
+        text: tableLines.join('\n'),
+        raw: tableLines.join('\n'),
+      });
+      continue;
+    }
+
     if (!line.trim()) {
       i++;
       continue;
@@ -167,4 +183,53 @@ export function parseMarkdownToBlocks(markdown: string): ParsedBlock[] {
   }
 
   return blocks;
+}
+
+export function blocksToMarkdown(blocks: ParsedBlock[]): string {
+  return blocks
+    .map((block) => {
+      switch (block.type) {
+        case 'h1': return `# ${block.text}`;
+        case 'h2': return `## ${block.text}`;
+        case 'h3': return `### ${block.text}`;
+        case 'h4': return `#### ${block.text}`;
+        case 'h5': return `##### ${block.text}`;
+        case 'h6': return `###### ${block.text}`;
+        case 'ul': return `- ${block.text}`;
+        case 'ol': return `1. ${block.text}`;
+        case 'quote': return `> ${block.text}`;
+        case 'code': return `\`\`\`\n${block.text}\n\`\`\``;
+        case 'hr': return '---';
+        case 'table': return block.text;
+        default: return block.text;
+      }
+    })
+    .join('\n\n');
+}
+
+export function parseTableMarkdown(tableRaw: string): string {
+  const rows = tableRaw
+    .split('\n')
+    .map((line) =>
+      line
+        .split('|')
+        .map((c) => c.trim())
+        .filter((_, idx, arr) => idx !== 0 && idx !== arr.length - 1)
+    );
+
+  if (rows.length < 2) return tableRaw;
+
+  const [header, , ...body] = rows;
+  const isAlignRow = (row: string[]) => row.every((c) => /^[-:]+$/.test(c));
+
+  const headerHtml = header
+    .map((cell) => `<th>${parseInlineMarkdown(cell)}</th>`)
+    .join('');
+
+  const bodyHtml = body
+    .filter((row) => !isAlignRow(row))
+    .map((row) => `<tr>${row.map((cell) => `<td>${parseInlineMarkdown(cell)}</td>`).join('')}</tr>`)
+    .join('');
+
+  return `<table><thead><tr>${headerHtml}</tr></thead><tbody>${bodyHtml}</tbody></table>`;
 }
