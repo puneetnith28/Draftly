@@ -1,4 +1,4 @@
-import { BlockType } from '@/types';
+import { BlockType, ParsedBlock } from '@/types';
 
 export interface BlockDetection {
   type: BlockType;
@@ -100,4 +100,48 @@ export function parseInlineMarkdown(text: string): string {
   html = html.replace(/`([^`]+)`/g, '<code>$1</code>');
 
   return html;
+}
+
+let blockCounter = 0;
+function nextBlockId(): string {
+  return `b_${Date.now()}_${blockCounter++}`;
+}
+
+export function parseMarkdownToBlocks(markdown: string): ParsedBlock[] {
+  if (!markdown.trim()) {
+    return [{ id: nextBlockId(), type: 'h1', text: '', raw: '' }];
+  }
+
+  const lines = markdown.split('\n');
+  const blocks: ParsedBlock[] = [];
+
+  for (const line of lines) {
+    if (!line.trim()) {
+      continue;
+    }
+
+    const detected = detectBlockType(line);
+    if (detected) {
+      blocks.push({
+        id: nextBlockId(),
+        type: detected.type,
+        text: detected.text,
+        raw: detected.raw,
+        language: detected.language,
+      });
+    } else {
+      blocks.push({
+        id: nextBlockId(),
+        type: 'p',
+        text: line,
+        raw: line,
+      });
+    }
+  }
+
+  if (blocks.length === 0) {
+    blocks.push({ id: nextBlockId(), type: 'h1', text: '', raw: '' });
+  }
+
+  return blocks;
 }
