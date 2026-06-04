@@ -114,9 +114,31 @@ export function parseMarkdownToBlocks(markdown: string): ParsedBlock[] {
 
   const lines = markdown.split('\n');
   const blocks: ParsedBlock[] = [];
+  let i = 0;
 
-  for (const line of lines) {
+  while (i < lines.length) {
+    const line = lines[i];
+    if (line.startsWith('```')) {
+      const lang = line.slice(3).trim();
+      const codeLines: string[] = [];
+      i++;
+      while (i < lines.length && !lines[i].startsWith('```')) {
+        codeLines.push(lines[i]);
+        i++;
+      }
+      i++;
+      blocks.push({
+        id: nextBlockId(),
+        type: 'code',
+        text: codeLines.join('\n'),
+        raw: `\`\`\`${lang}\n${codeLines.join('\n')}\n\`\`\``,
+        language: lang || undefined,
+      });
+      continue;
+    }
+
     if (!line.trim()) {
+      i++;
       continue;
     }
 
@@ -137,6 +159,7 @@ export function parseMarkdownToBlocks(markdown: string): ParsedBlock[] {
         raw: line,
       });
     }
+    i++;
   }
 
   if (blocks.length === 0) {
