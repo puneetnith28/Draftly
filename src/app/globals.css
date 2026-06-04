@@ -1,26 +1,127 @@
+@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@300;400;500;600;700&family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,400;0,9..144,600;1,9..144,300;1,9..144,400&family=Inter:wght@300;400;500;600&display=swap');
 @import "tailwindcss";
 
+
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --font-ui: 'Manrope', sans-serif;
+  --font-editor-fraunces: 'Fraunces', serif;
+  --font-editor-inter: 'Inter', sans-serif;
+  --content-width-narrow: 720px;
+  --content-width-medium: 960px;
+  --content-width-wide: 1200px;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+/* ── LIGHT THEME ── */
+[data-theme="light"] {
+  --bg-app: #f7f6f3;
+  --bg-editor: #f0efe9;
+  --bg-sidebar: #f0efe9;
+  --bg-toolbar: rgba(247, 246, 243, 0.96);
+  --bg-modal: #ffffff;
+  --bg-hover: rgba(0, 0, 0, 0.04);
+  --bg-active: rgba(37, 99, 235, 0.08);
+  --bg-block-hover: rgba(0, 0, 0, 0.025);
+  --bg-block-focus: rgba(37, 99, 235, 0.035);
+  --bg-code: #1e1e2e;
+  --bg-topbar: #f0efe9;
+
+  --text-primary: #1a1916;
+  --text-secondary: #6b6a65;
+  --text-muted: #a09e98;
+  --text-placeholder: #c4c2bb;
+  --text-inverse: #ffffff;
+  --text-code: #cdd6f4;
+
+  --border-default: rgba(0, 0, 0, 0.08);
+  --border-strong: rgba(0, 0, 0, 0.15);
+  --border-block-focus: rgba(37, 99, 235, 0.4);
+
+  --accent: #2563eb;
+  --accent-hover: #1d4ed8;
+
+  --shadow-toolbar: 0 4px 24px rgba(0, 0, 0, 0.12), 0 1px 4px rgba(0, 0, 0, 0.06);
+  --shadow-modal: 0 20px 60px rgba(0, 0, 0, 0.15);
+  --shadow-block-menu: 0 8px 24px rgba(0, 0, 0, 0.12), 0 2px 6px rgba(0, 0, 0, 0.06);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+/* ── DARK THEME ── */
+[data-theme="dark"] {
+  --bg-app: #141413;
+  --bg-editor: #111110;
+  --bg-sidebar: #111110;
+  --bg-toolbar: rgba(20, 20, 19, 0.96);
+  --bg-modal: #1e1d1b;
+  --bg-hover: rgba(255, 255, 255, 0.05);
+  --bg-active: rgba(96, 165, 250, 0.12);
+  --bg-block-hover: rgba(255, 255, 255, 0.02);
+  --bg-block-focus: rgba(96, 165, 250, 0.055);
+  --bg-code: #0d0d14;
+  --bg-topbar: #111110;
+
+  --text-primary: #e8e6e1;
+  --text-secondary: #8a8880;
+  --text-muted: #5a5854;
+  --text-placeholder: #3d3c39;
+  --text-inverse: #141413;
+  --text-code: #cdd6f4;
+
+  --border-default: rgba(255, 255, 255, 0.06);
+  --border-strong: rgba(255, 255, 255, 0.12);
+  --border-block-focus: rgba(96, 165, 250, 0.45);
+
+  --accent: #60a5fa;
+  --accent-hover: #93c5fd;
+
+  --shadow-toolbar: 0 4px 24px rgba(0, 0, 0, 0.5), 0 1px 4px rgba(0, 0, 0, 0.3);
+  --shadow-modal: 0 20px 60px rgba(0, 0, 0, 0.6);
+  --shadow-block-menu: 0 8px 24px rgba(0, 0, 0, 0.4), 0 2px 6px rgba(0, 0, 0, 0.2);
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+/* ── SEPIA THEME ── */
+[data-theme="sepia"] {
+  --bg-app: #f5f0e8;
+  --bg-editor: #ede8dc;
+  --bg-sidebar: #ede8dc;
+  --bg-toolbar: rgba(237, 232, 220, 0.96);
+  --bg-modal: #faf7f2;
+  --bg-hover: rgba(0, 0, 0, 0.04);
+  --bg-active: rgba(139, 94, 60, 0.08);
+  --bg-block-hover: rgba(0, 0, 0, 0.02);
+  --bg-block-focus: rgba(139, 94, 60, 0.04);
+  --bg-code: #1a160f;
+  --bg-topbar: #ede8dc;
+
+  --text-primary: #2c2416;
+  --text-secondary: #7a6b52;
+  --text-muted: #a8957a;
+  --text-placeholder: #c9b99a;
+  --text-inverse: #faf7f2;
+  --text-code: #e8dcc8;
+
+  --border-default: rgba(0, 0, 0, 0.07);
+  --border-strong: rgba(0, 0, 0, 0.14);
+  --border-block-focus: rgba(139, 94, 60, 0.45);
+
+  --accent: #8b5e3c;
+  --accent-hover: #6d4a2e;
+
+  --shadow-toolbar: 0 4px 24px rgba(0, 0, 0, 0.08), 0 1px 4px rgba(0, 0, 0, 0.04);
+  --shadow-modal: 0 20px 60px rgba(0, 0, 0, 0.12);
+  --shadow-block-menu: 0 8px 24px rgba(0, 0, 0, 0.1), 0 2px 6px rgba(0, 0, 0, 0.05);
+}
+
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html, body {
+  height: 100%;
+  font-family: var(--font-ui);
+  background: var(--bg-app);
+  color: var(--text-primary);
+  transition: background 0.2s ease, color 0.2s ease;
+  -webkit-font-smoothing: antialiased;
 }
