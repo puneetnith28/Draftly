@@ -4,6 +4,7 @@ import { useState, useCallback, useRef, useEffect } from 'react';
 import {
   BlockType,
   ParsedBlock,
+  detectBlockType,
   parseMarkdownToBlocks,
   blocksToMarkdown,
 } from '@/lib/markdownTransform';
@@ -343,6 +344,73 @@ export function useMarkdownEditor(
     [applyBlocksChange, placeCaretAfterRender]
   );
 
+  const handleTextChange = useCallback(
+    (blockId: string, rawText: string) => {
+      applyBlocksChange((prev) => {
+        const idx = prev.findIndex((b) => b.id === blockId);
+        if (idx === -1) return prev;
+
+        const detected = detectBlockType(rawText);
+        if (detected && detected.type !== 'p') {
+          const updated = prev.map((b, i) =>
+            i === idx
+              ? { ...b, type: detected.type, text: detected.text, raw: rawText, language: detected.language }
+              : b
+          );
+          requestAnimationFrame(() => {
+            const el = blockRefs.current.get(blockId);
+            if (el) {
+              el.textContent = detected.text;
+              try {
+                const range = document.createRange();
+                const sel = window.getSelection();
+                range.selectNodeContents(el);
+                range.collapse(false);
+                sel?.removeAllRanges();
+                sel?.addRange(range);
+              } catch { /* ignore */ }
+            }
+          });
+          return updated;
+        }
+        return prev.map((b, i) =>
+          i === idx ? { ...b, text: rawText, raw: rawText } : b
+        );
+      });
+    },
+    [applyBlocksChange]
+  );
+
+  const applyBlockFormat = useCallback(
+    (type: BlockType) => {
+      const targetBlockId = focusedBlockId ?? getSelectedBlockId();
+      if (!targetBlockId) return;
+      applyBlocksChange((prev) => {
+        return prev.map((b) =>
+          b.id === targetBlockId
+            ? { ...b, type, language: type === 'code' ? (b.language ?? 'plaintext') : undefined }
+            : b
+        );
+      });
+      setFocusedBlockId(targetBlockId);
+      requestAnimationFrame(() => {
+        const el = blockRefs.current.get(targetBlockId);
+        if (el) {
+          el.focus();
+          try {
+            const range = document.createRange();
+            const sel = window.getSelection();
+            range.selectNodeContents(el);
+            range.collapse(false);
+            sel?.removeAllRanges();
+            sel?.addRange(range);
+          } catch { /* ignore */ }
+        }
+      });
+    },
+    [focusedBlockId, getSelectedBlockId, applyBlocksChange]
+  );
+
   return {
     blocks,
     setBlocks,
@@ -361,5 +429,7 @@ export function useMarkdownEditor(
     handleEnter,
     handleBackspaceOnEmpty,
     mergeBlockWithPrevious,
+    handleTextChange,
+    applyBlockFormat,
   };
 }
