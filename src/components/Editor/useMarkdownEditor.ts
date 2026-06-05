@@ -444,6 +444,44 @@ export function useMarkdownEditor(
     [focusedBlockId, getSelectedBlockId, applyBlocksChange]
   );
 
+  const applyInlineFormat = useCallback(
+    (format: 'bold' | 'italic' | 'strikeThrough' | 'code' | 'link', value?: string) => {
+      const activeId = getSelectedBlockId();
+      if (!activeId) return;
+      const el = blockRefs.current.get(activeId);
+      if (!el) return;
+
+      if (format === 'bold') {
+        document.execCommand('bold', false);
+      } else if (format === 'italic') {
+        document.execCommand('italic', false);
+      } else if (format === 'strikeThrough') {
+        document.execCommand('strikeThrough', false);
+      } else if (format === 'code') {
+        const sel = window.getSelection();
+        if (sel && sel.rangeCount > 0) {
+          const range = sel.getRangeAt(0);
+          const txt = range.toString();
+          document.execCommand('insertHTML', false, `<code>${txt}</code>`);
+        }
+      } else if (format === 'link') {
+        const href = value ?? prompt('Enter link URL:');
+        if (href) {
+          document.execCommand('createLink', false, href);
+        }
+      }
+
+      const html = el.innerHTML;
+      applyBlocksChange((prev) => {
+        const block = prev.find((b) => b.id === activeId);
+        if (!block) return prev;
+        const text = block.type === 'table' ? tableDomToMarkdown(el) : htmlToMarkdown(html);
+        return prev.map((b) => (b.id === activeId ? { ...b, text, raw: text } : b));
+      });
+    },
+    [getSelectedBlockId, applyBlocksChange]
+  );
+
   return {
     blocks,
     setBlocks,
@@ -464,5 +502,6 @@ export function useMarkdownEditor(
     mergeBlockWithPrevious,
     handleTextChange,
     applyBlockFormat,
+    applyInlineFormat,
   };
 }
