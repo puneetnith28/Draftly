@@ -5,6 +5,20 @@ import { ParsedBlock } from '@/types';
 import { parseInlineMarkdown } from '@/lib/markdownTransform';
 import { htmlToMarkdown } from './useMarkdownEditor';
 
+const LANGUAGES = [
+  'plaintext',
+  'javascript',
+  'typescript',
+  'html',
+  'css',
+  'python',
+  'rust',
+  'go',
+  'sql',
+  'json',
+  'markdown',
+];
+
 interface EditorBlockProps {
   block: ParsedBlock;
   isFocused: boolean;
@@ -12,6 +26,7 @@ interface EditorBlockProps {
   onKeyDown: (id: string, e: React.KeyboardEvent<HTMLElement>) => void;
   onFocus: (id: string) => void;
   registerRef: (id: string, el: HTMLElement | null) => void;
+  onLanguageChange?: (id: string, language: string) => void;
 }
 
 export const EditorBlock: React.FC<EditorBlockProps> = ({
@@ -21,6 +36,7 @@ export const EditorBlock: React.FC<EditorBlockProps> = ({
   onKeyDown,
   onFocus,
   registerRef,
+  onLanguageChange,
 }) => {
   const elementRef = useRef<HTMLElement | null>(null);
 
@@ -47,7 +63,13 @@ export const EditorBlock: React.FC<EditorBlockProps> = ({
     registerRef(block.id, el);
   };
 
-  const innerHtml = parseInlineMarkdown(block.text);
+  const innerHtml =
+    block.type === 'code'
+      ? block.text
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;')
+      : parseInlineMarkdown(block.text);
 
   const commonProps = {
     ref: setRef as any,
@@ -101,8 +123,32 @@ export const EditorBlock: React.FC<EditorBlockProps> = ({
         </div>
       );
     case 'code':
+      const currentLang = block.language || 'plaintext';
+      const handleLanguageSelect = (e: React.ChangeEvent<HTMLSelectElement>) => {
+        onLanguageChange?.(block.id, e.target.value);
+      };
+      const handleCopy = () => {
+        navigator.clipboard.writeText(block.text).then(() => {
+        });
+      };
       return (
         <div className="editor-code-container" data-block-id={block.id}>
+          <div className="editor-code-header" contentEditable={false}>
+            <select
+              value={currentLang}
+              onChange={handleLanguageSelect}
+              className="editor-code-lang-select"
+            >
+              {LANGUAGES.map((lang) => (
+                <option key={lang} value={lang}>
+                  {lang}
+                </option>
+              ))}
+            </select>
+            <button onClick={handleCopy} className="editor-code-copy-btn">
+              Copy
+            </button>
+          </div>
           <pre {...commonProps} dangerouslySetInnerHTML={{ __html: innerHtml }} />
         </div>
       );
