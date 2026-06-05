@@ -507,6 +507,72 @@ export function useMarkdownEditor(
     });
   }, [cloneBlocks, syncToMarkdownDebounced]);
 
+  const clearDocument = useCallback(() => {
+    applyBlocksChange(() => {
+      const first = createBlock('p');
+      placeCaretAfterRender(first.id, 0);
+      return [first];
+    });
+  }, [applyBlocksChange, placeCaretAfterRender]);
+
+  const deleteBlock = useCallback(
+    (blockId: string) => {
+      applyBlocksChange((prev) => {
+        if (prev.length <= 1) {
+          const first = createBlock('p');
+          placeCaretAfterRender(first.id, 0);
+          return [first];
+        }
+        const idx = prev.findIndex((b) => b.id === blockId);
+        if (idx === -1) return prev;
+        const nextIdx = idx === prev.length - 1 ? idx - 1 : idx + 1;
+        const targetFocusBlock = prev[nextIdx];
+        if (targetFocusBlock) {
+          placeCaretAfterRender(targetFocusBlock.id, 0);
+        }
+        return prev.filter((b) => b.id !== blockId);
+      });
+    },
+    [applyBlocksChange, placeCaretAfterRender]
+  );
+
+  const moveBlock = useCallback(
+    (blockId: string, direction: 'up' | 'down') => {
+      applyBlocksChange((prev) => {
+        const idx = prev.findIndex((b) => b.id === blockId);
+        if (idx === -1) return prev;
+        if (direction === 'up' && idx === 0) return prev;
+        if (direction === 'down' && idx === prev.length - 1) return prev;
+
+        const targetIdx = direction === 'up' ? idx - 1 : idx + 1;
+        const current = prev[idx];
+        const target = prev[targetIdx];
+
+        const updated = [...prev];
+        updated[idx] = target;
+        updated[targetIdx] = current;
+
+        requestAnimationFrame(() => {
+          const el = blockRefs.current.get(blockId);
+          if (el) {
+            el.focus();
+            try {
+              const range = document.createRange();
+              const sel = window.getSelection();
+              range.selectNodeContents(el);
+              range.collapse(false);
+              sel?.removeAllRanges();
+              sel?.addRange(range);
+            } catch { /* ignore */ }
+          }
+        });
+
+        return updated;
+      });
+    },
+    [applyBlocksChange]
+  );
+
   return {
     blocks,
     setBlocks,
@@ -530,5 +596,8 @@ export function useMarkdownEditor(
     applyInlineFormat,
     undo,
     redo,
+    clearDocument,
+    deleteBlock,
+    moveBlock,
   };
 }
