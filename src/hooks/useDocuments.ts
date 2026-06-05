@@ -160,9 +160,21 @@ export function useDocuments() {
       if (f.id === id) {
         return { ...f, name };
       }
-      return f;
     });
     saveFoldersToStorage(updated);
+  };
+
+  const deleteFolder = (folderId: string) => {
+    const updatedFolders = folders.filter((f) => f.id !== folderId);
+    saveFoldersToStorage(updatedFolders);
+
+    const updatedDocs = documents.map((doc) => {
+      if (doc.folderId === folderId) {
+        return { ...doc, folderId: null };
+      }
+      return doc;
+    });
+    saveToStorage(updatedDocs);
   };
 
   const activeDocument = documents.find(d => d.id === activeDocId) || null;
@@ -183,5 +195,6 @@ export function useDocuments() {
     duplicateDocument,
     createFolder,
     renameFolder,
+    deleteFolder,
   };
 }
