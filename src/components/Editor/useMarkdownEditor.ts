@@ -63,6 +63,7 @@ export function useMarkdownEditor(
   const blockRefs = useRef<Map<string, HTMLElement>>(new Map());
   const syncTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const savedSelectionRef = useRef<Range | null>(null);
+  const historyRef = useRef<{ past: ParsedBlock[][]; future: ParsedBlock[][] }>({ past: [], future: [] });
 
   const syncToMarkdown = useCallback(
     (updated: ParsedBlock[]) => {
@@ -90,11 +91,13 @@ export function useMarkdownEditor(
       setBlocks((prev) => {
         const next = updater(prev);
         if (next === prev) return prev;
+        historyRef.current.past.push(cloneBlocks(prev));
+        historyRef.current.future = [];
         syncToMarkdownDebounced(next);
         return next;
       });
     },
-    [syncToMarkdownDebounced]
+    [syncToMarkdownDebounced, cloneBlocks]
   );
 
   const registerRef = useCallback((id: string, el: HTMLElement | null) => {
@@ -482,6 +485,28 @@ export function useMarkdownEditor(
     [getSelectedBlockId, applyBlocksChange]
   );
 
+  const undo = useCallback(() => {
+    const { past, future } = historyRef.current;
+    if (past.length === 0) return;
+    const previous = past.pop()!;
+    setBlocks((prev) => {
+      future.push(cloneBlocks(prev));
+      syncToMarkdownDebounced(previous);
+      return previous;
+    });
+  }, [cloneBlocks, syncToMarkdownDebounced]);
+
+  const redo = useCallback(() => {
+    const { past, future } = historyRef.current;
+    if (future.length === 0) return;
+    const next = future.pop()!;
+    setBlocks((prev) => {
+      past.push(cloneBlocks(prev));
+      syncToMarkdownDebounced(next);
+      return next;
+    });
+  }, [cloneBlocks, syncToMarkdownDebounced]);
+
   return {
     blocks,
     setBlocks,
@@ -503,5 +528,7 @@ export function useMarkdownEditor(
     handleTextChange,
     applyBlockFormat,
     applyInlineFormat,
+    undo,
+    redo,
   };
 }
