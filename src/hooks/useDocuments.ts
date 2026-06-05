@@ -174,7 +174,26 @@ export function useDocuments() {
       }
       return doc;
     });
+  };
+
+  const reorderFolders = (newFolders: DocumentFolder[]) => {
+    const updated = newFolders.map((folder, index) => ({
+      ...folder,
+      sortOrder: index,
+    }));
+    saveFoldersToStorage(updated);
+  };
+
+  const reorderDocuments = (newDocs: Document[]) => {
+    const updatedDocs = newDocs.map((doc, index) => ({
+      ...doc,
+      sortOrder: index,
+    }));
     saveToStorage(updatedDocs);
+  };
+
+  const moveDocumentToFolder = (docId: string, folderId: string | null) => {
+    updateDocument(docId, { folderId });
   };
 
   const activeDocument = documents.find(d => d.id === activeDocId) || null;
@@ -196,5 +215,8 @@ export function useDocuments() {
     createFolder,
     renameFolder,
     deleteFolder,
+    reorderFolders,
+    reorderDocuments,
+    moveDocumentToFolder,
   };
 }
