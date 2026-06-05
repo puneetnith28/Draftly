@@ -280,6 +280,69 @@ export function useMarkdownEditor(
     [applyBlocksChange, placeCaretAfterRender]
   );
 
+  const handleBackspaceOnEmpty = useCallback(
+    (blockId: string) => {
+      applyBlocksChange((prev) => {
+        const idx = prev.findIndex((b) => b.id === blockId);
+        if (idx === -1) return prev;
+        const block = prev[idx];
+        if (block.type !== 'p') {
+          return prev.map((b, i) =>
+            i === idx ? { ...b, type: 'p' as BlockType, text: '', raw: '' } : b
+          );
+        }
+        if (prev.length === 1) return prev;
+        const updated = prev.filter((_, i) => i !== idx);
+        const prevIdx = Math.max(0, idx - 1);
+        const prevBlock = updated[prevIdx];
+        requestAnimationFrame(() => {
+          const el = prevBlock ? blockRefs.current.get(prevBlock.id) : undefined;
+          if (el) {
+            el.focus();
+            try {
+              const range = document.createRange();
+              const sel = window.getSelection();
+              range.selectNodeContents(el);
+              range.collapse(false);
+              sel?.removeAllRanges();
+              sel?.addRange(range);
+            } catch { /* ignore */ }
+          }
+        });
+        return updated;
+      });
+    },
+    [applyBlocksChange]
+  );
+
+  const mergeBlockWithPrevious = useCallback(
+    (blockId: string) => {
+      applyBlocksChange((prev) => {
+        const idx = prev.findIndex((b) => b.id === blockId);
+        if (idx <= 0) return prev;
+        const previous = prev[idx - 1];
+        const current = prev[idx];
+        const previousEl = blockRefs.current.get(previous.id);
+        const caretOffset = previousEl?.textContent?.length ?? previous.text.length;
+        const mergedText = `${previous.text}${current.text}`;
+        const mergedPrevious: ParsedBlock = {
+          ...previous,
+          type: previous.type === 'hr' ? 'p' : previous.type,
+          text: mergedText,
+          raw: mergedText,
+        };
+        const updated = [
+          ...prev.slice(0, idx - 1),
+          mergedPrevious,
+          ...prev.slice(idx + 1),
+        ];
+        placeCaretAfterRender(mergedPrevious.id, caretOffset);
+        return updated;
+      });
+    },
+    [applyBlocksChange, placeCaretAfterRender]
+  );
+
   return {
     blocks,
     setBlocks,
@@ -296,5 +359,7 @@ export function useMarkdownEditor(
     focusBlock,
     handleArrowNavigation,
     handleEnter,
+    handleBackspaceOnEmpty,
+    mergeBlockWithPrevious,
   };
 }
