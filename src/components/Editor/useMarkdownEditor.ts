@@ -18,6 +18,39 @@ function createBlock(type: BlockType = 'p', text = ''): ParsedBlock {
   return { id: newId(), type, text, raw: '' };
 }
 
+export function htmlToMarkdown(html: string): string {
+  let text = html;
+  text = text.replace(/<strong>(.*?)<\/strong>/gi, '**$1**');
+  text = text.replace(/<b>(.*?)<\/b>/gi, '**$1**');
+  text = text.replace(/<em>(.*?)<\/em>/gi, '*$1*');
+  text = text.replace(/<i>(.*?)<\/i>/gi, '*$1*');
+  text = text.replace(/<del>(.*?)<\/del>/gi, '~~$1~~');
+  text = text.replace(/<code>(.*?)<\/code>/gi, '`$1`');
+  text = text.replace(/<a\s+href="([^"]+)"[^>]*>(.*?)<\/a>/gi, '[$2]($1)');
+  text = text.replace(/<[^>]+>/g, '');
+  text = text.replace(/&amp;/g, '&');
+  text = text.replace(/&lt;/g, '<');
+  text = text.replace(/&gt;/g, '>');
+  text = text.replace(/&nbsp;/g, ' ');
+  return text;
+}
+
+export function tableDomToMarkdown(tableEl: HTMLElement): string {
+  const rows = Array.from(tableEl.querySelectorAll('tr'));
+  if (rows.length === 0) return '';
+  const markdownRows: string[] = [];
+  rows.forEach((row, rIdx) => {
+    const cells = Array.from(row.querySelectorAll('th, td'));
+    const cellTexts = cells.map((cell) => cell.textContent?.trim() ?? '');
+    markdownRows.push(`| ${cellTexts.join(' | ')} |`);
+    if (rIdx === 0) {
+      const separators = cells.map(() => '---');
+      markdownRows.push(`| ${separators.join(' | ')} |`);
+    }
+  });
+  return markdownRows.join('\n');
+}
+
 export function useMarkdownEditor(
   initialContent: string,
   onChange: (markdown: string) => void
