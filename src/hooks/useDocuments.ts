@@ -70,7 +70,20 @@ export function useDocuments() {
     saveToStorage(updated);
     setActiveDocId(newDoc.id);
     localStorage.setItem(ACTIVE_DOC_KEY, newDoc.id);
-    return newDoc;
+  };
+
+  const updateDocument = (id: string, updates: Partial<Omit<Document, 'id' | 'createdAt'>>) => {
+    const updatedDocs = documents.map((doc) => {
+      if (doc.id === id) {
+        return {
+          ...doc,
+          ...updates,
+          updatedAt: Date.now(),
+        };
+      }
+      return doc;
+    });
+    saveToStorage(updatedDocs);
   };
 
   const activeDocument = documents.find(d => d.id === activeDocId) || null;
@@ -85,5 +98,6 @@ export function useDocuments() {
       localStorage.setItem(ACTIVE_DOC_KEY, id);
     },
     createDocument,
+    updateDocument,
   };
 }
