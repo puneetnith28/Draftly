@@ -1,11 +1,13 @@
 import { useState, useEffect } from 'react';
-import { Document } from '@/types';
+import { Document, DocumentFolder } from '@/types';
 
 const STORAGE_KEY = 'draftly_documents';
 const ACTIVE_DOC_KEY = 'draftly_active_doc_id';
+const FOLDER_STORAGE_KEY = 'draftly_folders';
 
 export function useDocuments() {
   const [documents, setDocuments] = useState<Document[]>([]);
+  const [folders, setFolders] = useState<DocumentFolder[]>([]);
   const [activeDocId, setActiveDocId] = useState<string | null>(null);
   const [isLoaded, setIsLoaded] = useState(false);
 
@@ -19,6 +21,11 @@ export function useDocuments() {
       let parsedDocs: Document[] = [];
       if (storedDocs) {
         parsedDocs = JSON.parse(storedDocs);
+      }
+
+      const storedFolders = localStorage.getItem(FOLDER_STORAGE_KEY);
+      if (storedFolders) {
+        setFolders(JSON.parse(storedFolders));
       }
 
       if (parsedDocs.length === 0) {
@@ -55,12 +62,17 @@ export function useDocuments() {
     setDocuments(newDocs);
   };
 
-  const createDocument = () => {
+  const saveFoldersToStorage = (newFolders: DocumentFolder[]) => {
+    localStorage.setItem(FOLDER_STORAGE_KEY, JSON.stringify(newFolders));
+    setFolders(newFolders);
+  };
+
+  const createDocument = (folderId: string | null = null) => {
     const newDoc: Document = {
       id: `doc_${Date.now()}`,
       title: 'Untitled Note',
       content: '',
-      folderId: null,
+      folderId,
       sortOrder: documents.length,
       createdAt: Date.now(),
       updatedAt: Date.now(),
@@ -132,10 +144,32 @@ export function useDocuments() {
     localStorage.setItem(ACTIVE_DOC_KEY, duplicated.id);
   };
 
+  const createFolder = (name: string, color: string = '#3b82f6') => {
+    const newFolder: DocumentFolder = {
+      id: `folder_${Date.now()}`,
+      name,
+      color,
+      sortOrder: folders.length,
+    };
+    const updated = [...folders, newFolder];
+    saveFoldersToStorage(updated);
+  };
+
+  const renameFolder = (id: string, name: string) => {
+    const updated = folders.map((f) => {
+      if (f.id === id) {
+        return { ...f, name };
+      }
+      return f;
+    });
+    saveFoldersToStorage(updated);
+  };
+
   const activeDocument = documents.find(d => d.id === activeDocId) || null;
 
   return {
     documents,
+    folders,
     activeDocId,
     activeDocument,
     isLoaded,
@@ -147,5 +181,7 @@ export function useDocuments() {
     updateDocument,
     deleteDocument,
     duplicateDocument,
+    createFolder,
+    renameFolder,
   };
 }
