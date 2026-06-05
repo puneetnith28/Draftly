@@ -86,6 +86,52 @@ export function useDocuments() {
     saveToStorage(updatedDocs);
   };
 
+  const deleteDocument = (id: string) => {
+    const remaining = documents.filter((doc) => doc.id !== id);
+
+    if (activeDocId === id) {
+      if (remaining.length > 0) {
+        const fallbackId = remaining[remaining.length - 1].id;
+        setActiveDocId(fallbackId);
+        localStorage.setItem(ACTIVE_DOC_KEY, fallbackId);
+      } else {
+        const welcomeDoc: Document = {
+          id: `doc_${Date.now()}`,
+          title: 'Welcome to Draftly',
+          content: '# Welcome to Draftly\n\nThis is your first note.',
+          folderId: null,
+          sortOrder: 0,
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+        };
+        remaining.push(welcomeDoc);
+        setActiveDocId(welcomeDoc.id);
+        localStorage.setItem(ACTIVE_DOC_KEY, welcomeDoc.id);
+      }
+    }
+
+    saveToStorage(remaining);
+  };
+
+  const duplicateDocument = (id: string) => {
+    const target = documents.find((doc) => doc.id === id);
+    if (!target) return;
+
+    const duplicated: Document = {
+      ...target,
+      id: `doc_${Date.now()}`,
+      title: `${target.title} (Copy)`,
+      sortOrder: documents.length,
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    };
+
+    const updated = [...documents, duplicated];
+    saveToStorage(updated);
+    setActiveDocId(duplicated.id);
+    localStorage.setItem(ACTIVE_DOC_KEY, duplicated.id);
+  };
+
   const activeDocument = documents.find(d => d.id === activeDocId) || null;
 
   return {
@@ -99,5 +145,7 @@ export function useDocuments() {
     },
     createDocument,
     updateDocument,
+    deleteDocument,
+    duplicateDocument,
   };
 }
