@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useDocuments } from '@/hooks/useDocuments';
 import { usePreferences } from '@/hooks/usePreferences';
 import { Sidebar } from '@/components/Sidebar';
@@ -14,6 +14,8 @@ import {
   exportToRtf,
   exportToDocx,
 } from '@/lib/exportUtils';
+import { registerServiceWorker, unregisterServiceWorker } from '@/lib/serviceWorkerRegistration';
+import { InstallPwaButton } from '@/components/InstallPwaButton';
 
 export default function Home() {
   const {
@@ -38,6 +40,14 @@ export default function Home() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [preferencesOpen, setPreferencesOpen] = useState(false);
   const [savingStatus, setSavingStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
+
+  useEffect(() => {
+    if (process.env.NODE_ENV === 'production') {
+      registerServiceWorker();
+      return;
+    }
+    void unregisterServiceWorker();
+  }, []);
 
   const handleTitleChange = (id: string, title: string) => {
     updateDocument(id, { title });
@@ -131,6 +141,7 @@ export default function Home() {
         preferences={preferences}
         updatePreference={updatePreference}
       />
+      <InstallPwaButton />
     </div>
   );
 }
