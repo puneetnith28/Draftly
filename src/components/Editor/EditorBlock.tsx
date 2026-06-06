@@ -2,8 +2,8 @@
 
 import React, { useRef, useEffect } from 'react';
 import { ParsedBlock } from '@/types';
-import { parseInlineMarkdown } from '@/lib/markdownTransform';
-import { htmlToMarkdown } from './useMarkdownEditor';
+import { parseInlineMarkdown, parseTableMarkdown } from '@/lib/markdownTransform';
+import { htmlToMarkdown, tableDomToMarkdown } from './useMarkdownEditor';
 
 const LANGUAGES = [
   'plaintext',
@@ -50,7 +50,7 @@ export const EditorBlock: React.FC<EditorBlockProps> = ({
 
   const handleInput = (e: React.FormEvent<HTMLElement>) => {
     const el = e.currentTarget;
-    const markdown = htmlToMarkdown(el.innerHTML);
+    const markdown = block.type === 'table' ? tableDomToMarkdown(el) : htmlToMarkdown(el.innerHTML);
     onTextChange(block.id, markdown);
   };
 
@@ -153,9 +153,113 @@ export const EditorBlock: React.FC<EditorBlockProps> = ({
         </div>
       );
     case 'table':
+      const handleTableChange = () => {
+        const el = elementRef.current;
+        if (el) {
+          onTextChange(block.id, tableDomToMarkdown(el));
+        }
+      };
+
+      const handleAddRow = (e: React.MouseEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const el = elementRef.current;
+        if (!el) return;
+        const tbody = el.querySelector('tbody');
+        if (!tbody) return;
+        const lastRow = tbody.querySelector('tr') || el.querySelector('thead tr');
+        if (!lastRow) return;
+        const colCount = lastRow.cells.length;
+
+        const newRow = document.createElement('tr');
+        for (let i = 0; i < colCount; i++) {
+          const td = document.createElement('td');
+          td.innerHTML = 'Cell';
+          newRow.appendChild(td);
+        }
+        tbody.appendChild(newRow);
+        handleTableChange();
+      };
+
+      const handleAddColumn = (e: React.MouseEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const el = elementRef.current;
+        if (!el) return;
+
+        const theadRow = el.querySelector('thead tr');
+        if (theadRow) {
+          const th = document.createElement('th');
+          th.innerHTML = 'Header';
+          theadRow.appendChild(th);
+        }
+
+        const bodyRows = el.querySelectorAll('tbody tr');
+        bodyRows.forEach((row) => {
+          const td = document.createElement('td');
+          td.innerHTML = 'Cell';
+          row.appendChild(td);
+        });
+
+        handleTableChange();
+      };
+
+      const handleDeleteRow = (e: React.MouseEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const el = elementRef.current;
+        if (!el) return;
+        const tbody = el.querySelector('tbody');
+        if (!tbody) return;
+        const rows = tbody.querySelectorAll('tr');
+        if (rows.length <= 1) return;
+        rows[rows.length - 1].remove();
+        handleTableChange();
+      };
+
+      const handleDeleteColumn = (e: React.MouseEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const el = elementRef.current;
+        if (!el) return;
+
+        const theadRow = el.querySelector('thead tr');
+        if (theadRow && theadRow.cells.length <= 1) return;
+
+        if (theadRow) {
+          theadRow.cells[theadRow.cells.length - 1].remove();
+        }
+
+        const bodyRows = el.querySelectorAll('tbody tr');
+        bodyRows.forEach((row) => {
+          if (row.cells.length > 0) {
+            row.cells[row.cells.length - 1].remove();
+          }
+        });
+
+        handleTableChange();
+      };
+
       return (
         <div className="editor-table-container" data-block-id={block.id}>
-          <div {...commonProps} dangerouslySetInnerHTML={{ __html: innerHtml }} />
+          <div className="editor-table-header" contentEditable={false}>
+            <button onClick={handleAddRow} className="editor-table-btn">
+              + Row
+            </button>
+            <button onClick={handleAddColumn} className="editor-table-btn">
+              + Col
+            </button>
+            <button onClick={handleDeleteRow} className="editor-table-btn">
+              - Row
+            </button>
+            <button onClick={handleDeleteColumn} className="editor-table-btn">
+              - Col
+            </button>
+          </div>
+          <div
+            {...commonProps}
+            dangerouslySetInnerHTML={{ __html: parseTableMarkdown(block.text) }}
+          />
         </div>
       );
     default:
