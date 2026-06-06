@@ -160,6 +160,7 @@ export function useDocuments() {
       if (f.id === id) {
         return { ...f, name };
       }
+      return f;
     });
     saveFoldersToStorage(updated);
   };
@@ -174,6 +175,7 @@ export function useDocuments() {
       }
       return doc;
     });
+    saveToStorage(updatedDocs);
   };
 
   const reorderFolders = (newFolders: DocumentFolder[]) => {

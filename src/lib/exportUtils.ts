@@ -384,3 +384,79 @@ ${rtfBody}
   const filename = `${title.toLowerCase().replace(/[^a-z0-9]+/g, '_') || 'untitled'}.rtf`;
   downloadBlob(blob, filename);
 }
+
+export function exportToDocx(title: string, markdown: string) {
+  const blocks = parseMarkdownToBlocks(markdown);
+  const bodyHtml = blocksToHtml(blocks);
+  
+  const fullHtml = `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40">
+<head>
+  <meta charset="utf-8">
+  <title>${title || 'Untitled'}</title>
+  <!--[if gte mso 9]>
+  <xml>
+    <w:WordDocument>
+      <w:View>Print</w:View>
+      <w:Zoom>100</w:Zoom>
+      <w:DoNotOptimizeForBrowser/>
+    </w:WordDocument>
+  </xml>
+  <![endif]-->
+  <style>
+    body {
+      font-family: 'Arial', sans-serif;
+      line-height: 1.6;
+      color: #333333;
+    }
+    h1 { font-size: 24pt; font-weight: bold; margin-top: 18pt; margin-bottom: 6pt; }
+    h2 { font-size: 18pt; font-weight: bold; margin-top: 16pt; margin-bottom: 6pt; }
+    h3 { font-size: 14pt; font-weight: bold; margin-top: 14pt; margin-bottom: 4pt; }
+    p { margin-top: 0; margin-bottom: 12pt; }
+    ul, ol { margin-top: 0; margin-bottom: 12pt; padding-left: 20pt; }
+    li { margin-bottom: 3pt; }
+    blockquote {
+      margin: 12pt 0;
+      padding-left: 12pt;
+      border-left: 3pt solid #cccccc;
+      color: #666666;
+      font-style: italic;
+    }
+    pre {
+      background-color: #f5f5f5;
+      padding: 10pt;
+      border: 1px solid #e0e0e0;
+      font-family: 'Courier New', monospace;
+      font-size: 10pt;
+      margin: 12pt 0;
+    }
+    code {
+      font-family: 'Courier New', monospace;
+      font-size: 10pt;
+      background-color: #f5f5f5;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 15pt 0;
+    }
+    th, td {
+      border: 1px solid #cccccc;
+      padding: 6pt 8pt;
+      text-align: left;
+    }
+    th {
+      background-color: #f0f0f0;
+      font-weight: bold;
+    }
+  </style>
+</head>
+<body>
+  <h1>${title || 'Untitled'}</h1>
+  ${bodyHtml}
+</body>
+</html>`;
+
+  const blob = new Blob(['\ufeff' + fullHtml], { type: 'application/msword;charset=utf-8' });
+  const filename = `${title.toLowerCase().replace(/[^a-z0-9]+/g, '_') || 'untitled'}.docx`;
+  downloadBlob(blob, filename);
+}
