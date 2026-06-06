@@ -283,3 +283,104 @@ export function exportToPdf(title: string, markdown: string) {
     printWindow.document.close();
   }
 }
+
+function cleanRtfText(text: string): string {
+  let rtf = text
+    .replace(/\\/g, '\\\\')
+    .replace(/{/g, '\\{')
+    .replace(/}/g, '\\}');
+  
+  rtf = rtf.replace(/(\*{3}|_{3})(.+?)\1/g, '{\\b\\i $2}');
+  rtf = rtf.replace(/(\*{2}|_{2})(.+?)\1/g, '{\\b $2}');
+  rtf = rtf.replace(/(\*|_)(.+?)\1/g, '{\\i $2}');
+  rtf = rtf.replace(/~~(.+?)~~/g, '{\\strike $2}');
+  rtf = rtf.replace(/`([^`]+)`/g, '{\\f1 $1}');
+  rtf = rtf.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '$1 ($2)');
+  
+  return rtf;
+}
+
+export function exportToRtf(title: string, markdown: string) {
+  const blocks = parseMarkdownToBlocks(markdown);
+  let rtfBody = '';
+  let olCounter = 1;
+
+  blocks.forEach((block, idx) => {
+    if (idx > 0 && blocks[idx - 1].type !== 'ol') {
+      olCounter = 1;
+    }
+
+    const cleanText = cleanRtfText(block.text);
+
+    switch (block.type) {
+      case 'h1':
+        rtfBody += `\\fs48\\b ${cleanText}\\b0\\par\\par\n`;
+        break;
+      case 'h2':
+        rtfBody += `\\fs36\\b ${cleanText}\\b0\\par\\par\n`;
+        break;
+      case 'h3':
+        rtfBody += `\\fs28\\b ${cleanText}\\b0\\par\\par\n`;
+        break;
+      case 'h4':
+        rtfBody += `\\fs24\\b ${cleanText}\\b0\\par\\par\n`;
+        break;
+      case 'h5':
+        rtfBody += `\\fs20\\b ${cleanText}\\b0\\par\\par\n`;
+        break;
+      case 'h6':
+        rtfBody += `\\fs16\\b ${cleanText}\\b0\\par\\par\n`;
+        break;
+      case 'ul':
+        rtfBody += `\\li360\\bullet  ${cleanText}\\par\n`;
+        break;
+      case 'ol':
+        rtfBody += `\\li360 ${olCounter}. ${cleanText}\\par\n`;
+        olCounter++;
+        break;
+      case 'quote':
+        rtfBody += `\\li720\\i ${cleanText}\\i0\\par\\par\n`;
+        break;
+      case 'code':
+        const codeLines = block.text
+          .split('\n')
+          .map((line) => `\\li360\\f1 ${cleanRtfText(line)}`)
+          .join('\\par\n');
+        rtfBody += `${codeLines}\\par\\par\n`;
+        break;
+      case 'hr':
+        rtfBody += `\\pard\\brdrb\\brdrs\\brdrw10\\brsp20 \\par\\pard\\par\n`;
+        break;
+      case 'table':
+        const rows = block.text
+          .split('\n')
+          .map((row) =>
+            row
+              .split('|')
+              .map((c) => c.trim())
+              .filter(Boolean)
+          );
+        let tableRtf = '';
+        rows.forEach((row) => {
+          if (row.length === 0 || row.every((c) => /^[-:]+$/.test(c))) return;
+          tableRtf += '\\li360 ' + row.map((c) => cleanRtfText(c)).join(' \\tab ') + '\\par\n';
+        });
+        rtfBody += `${tableRtf}\\par\n`;
+        break;
+      default:
+        rtfBody += `${cleanText}\\par\\par\n`;
+        break;
+    }
+  });
+
+  const fullRtf = `{\\rtf1\\ansi\\deff0
+{\\fonttbl{\\f0\\fnil\\fcharset0 Arial;}{\\f1\\fmodern\\fcharset0 Courier New;}}
+\\viewkind4\\uc1\\pard\\f0\\fs24
+\\fs56\\b ${cleanRtfText(title)}\\b0\\par\\par
+${rtfBody}
+}`;
+
+  const blob = new Blob([fullRtf], { type: 'application/rtf;charset=utf-8' });
+  const filename = `${title.toLowerCase().replace(/[^a-z0-9]+/g, '_') || 'untitled'}.rtf`;
+  downloadBlob(blob, filename);
+}
