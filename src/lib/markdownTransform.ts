@@ -234,3 +234,5 @@ export function parseTableMarkdown(tableRaw: string): string {
 
   return `<table><thead><tr>${headerHtml}</tr></thead><tbody>${bodyHtml}</tbody></table>`;
 }
+
+export type { ParsedBlock };
