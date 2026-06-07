@@ -1,13 +1,9 @@
 'use client';
 
 import { useState, useCallback, useRef, useEffect } from 'react';
-import {
-  BlockType,
-  ParsedBlock,
-  detectBlockType,
-  parseMarkdownToBlocks,
-  blocksToMarkdown,
-} from '@/lib/markdownTransform';
+import { detectBlockType, parseMarkdownToBlocks, blocksToMarkdown } from '@/lib/markdownTransform';
+import { BlockType, ParsedBlock } from '@/types';
+
 
 let idCounter = 0;
 function newId() {
@@ -15,40 +11,54 @@ function newId() {
 }
 
 function createBlock(type: BlockType = 'p', text = ''): ParsedBlock {
-  return { id: newId(), type, text, raw: '' };
+  return { id: newId(), type, text, raw: '', language: undefined };
 }
 
-export function htmlToMarkdown(html: string): string {
-  let text = html;
-  text = text.replace(/<strong>(.*?)<\/strong>/gi, '**$1**');
-  text = text.replace(/<b>(.*?)<\/b>/gi, '**$1**');
-  text = text.replace(/<em>(.*?)<\/em>/gi, '*$1*');
-  text = text.replace(/<i>(.*?)<\/i>/gi, '*$1*');
-  text = text.replace(/<del>(.*?)<\/del>/gi, '~~$1~~');
-  text = text.replace(/<code>(.*?)<\/code>/gi, '`$1`');
-  text = text.replace(/<a\s+href="([^"]+)"[^>]*>(.*?)<\/a>/gi, '[$2]($1)');
-  text = text.replace(/<[^>]+>/g, '');
-  text = text.replace(/&amp;/g, '&');
-  text = text.replace(/&lt;/g, '<');
-  text = text.replace(/&gt;/g, '>');
-  text = text.replace(/&nbsp;/g, ' ');
-  return text;
+function htmlToMarkdown(html: string): string {
+  return html
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<strong><em>([\s\S]*?)<\/em><\/strong>/gi, '***$1***')
+    .replace(/<em><strong>([\s\S]*?)<\/strong><\/em>/gi, '***$1***')
+    .replace(/<strong>([\s\S]*?)<\/strong>/gi, '**$1**')
+    .replace(/<b>([\s\S]*?)<\/b>/gi, '**$1**')
+    .replace(/<em>([\s\S]*?)<\/em>/gi, '*$1*')
+    .replace(/<i>([\s\S]*?)<\/i>/gi, '*$1*')
+    .replace(/<del>([\s\S]*?)<\/del>/gi, '~~$1~~')
+    .replace(/<s>([\s\S]*?)<\/s>/gi, '~~$1~~')
+    .replace(/<code>([\s\S]*?)<\/code>/gi, '`$1`')
+    .replace(/<a[^>]*href="([^"]*)"[^>]*>([\s\S]*?)<\/a>/gi, '[$2]($1)')
+    .replace(/<[^>]+>/g, '')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&quot;/g, '"');
 }
 
-export function tableDomToMarkdown(tableEl: HTMLElement): string {
-  const rows = Array.from(tableEl.querySelectorAll('tr'));
-  if (rows.length === 0) return '';
-  const markdownRows: string[] = [];
-  rows.forEach((row, rIdx) => {
-    const cells = Array.from(row.querySelectorAll('th, td'));
-    const cellTexts = cells.map((cell) => cell.textContent?.trim() ?? '');
-    markdownRows.push(`| ${cellTexts.join(' | ')} |`);
-    if (rIdx === 0) {
-      const separators = cells.map(() => '---');
-      markdownRows.push(`| ${separators.join(' | ')} |`);
-    }
-  });
-  return markdownRows.join('\n');
+function tableDomToMarkdown(container: HTMLElement): string | null {
+  const table = container.querySelector('table.editor-table');
+  if (!table) return null;
+
+  const headers = Array.from(
+    table.querySelectorAll('thead th.editor-table-th:not(.table-add-col-th) .table-cell-input')
+  ).map((cell) => htmlToMarkdown((cell as HTMLElement).innerHTML).trim());
+
+  if (headers.length === 0) return null;
+
+  const bodyRows = Array.from(table.querySelectorAll('tbody tr')).map((row) =>
+    Array.from(
+      row.querySelectorAll('td.editor-table-td:not(.table-row-actions) .table-cell-input')
+    ).map((cell) => htmlToMarkdown((cell as HTMLElement).innerHTML).trim())
+  );
+
+  const rows = bodyRows.length > 0 ? bodyRows : [headers.map(() => '')];
+  const separator = headers.map(() => '--------');
+
+  return [
+    `| ${headers.join(' | ')} |`,
+    `| ${separator.join(' | ')} |`,
+    ...rows.map((row) => `| ${row.join(' | ')} |`),
+  ].join('\n');
 }
 
 export function useMarkdownEditor(
@@ -61,9 +71,28 @@ export function useMarkdownEditor(
   });
   const [focusedBlockId, setFocusedBlockId] = useState<string | null>(null);
   const blockRefs = useRef<Map<string, HTMLElement>>(new Map());
-  const syncTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const undoStackRef = useRef<ParsedBlock[][]>([]);
+  const redoStackRef = useRef<ParsedBlock[][]>([]);
+  const isApplyingHistoryRef = useRef(false);
   const savedSelectionRef = useRef<Range | null>(null);
-  const historyRef = useRef<{ past: ParsedBlock[][]; future: ParsedBlock[][] }>({ past: [], future: [] });
+  const parseCacheRef = useRef<Map<string, { content: string; blocks: ParsedBlock[] }>>(new Map());
+
+  const cloneBlocks = useCallback((items: ParsedBlock[]) => items.map((b) => ({ ...b })), []);
+
+  const parseWithCache = useCallback(
+    (docId: string, content: string): ParsedBlock[] => {
+      const cached = parseCacheRef.current.get(docId);
+      if (cached && cached.content === content) {
+        return cloneBlocks(cached.blocks);
+      }
+
+      const parsed = parseMarkdownToBlocks(content);
+      const normalized = parsed.length > 0 ? parsed : [createBlock('h1')];
+      parseCacheRef.current.set(docId, { content, blocks: cloneBlocks(normalized) });
+      return normalized;
+    },
+    [cloneBlocks]
+  );
 
   const syncToMarkdown = useCallback(
     (updated: ParsedBlock[]) => {
@@ -72,11 +101,10 @@ export function useMarkdownEditor(
     [onChange]
   );
 
+  const syncTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const syncToMarkdownDebounced = useCallback(
     (updated: ParsedBlock[]) => {
-      if (syncTimeoutRef.current) {
-        clearTimeout(syncTimeoutRef.current);
-      }
+      if (syncTimeoutRef.current) clearTimeout(syncTimeoutRef.current);
       syncTimeoutRef.current = setTimeout(() => {
         syncToMarkdown(updated);
       }, 300);
@@ -84,36 +112,26 @@ export function useMarkdownEditor(
     [syncToMarkdown]
   );
 
-  const cloneBlocks = useCallback((items: ParsedBlock[]) => items.map((b) => ({ ...b })), []);
-
   const applyBlocksChange = useCallback(
     (updater: (prev: ParsedBlock[]) => ParsedBlock[]) => {
       setBlocks((prev) => {
         const next = updater(prev);
         if (next === prev) return prev;
-        historyRef.current.past.push(cloneBlocks(prev));
-        historyRef.current.future = [];
+        if (!isApplyingHistoryRef.current) {
+          undoStackRef.current.push(cloneBlocks(prev));
+          if (undoStackRef.current.length > 200) undoStackRef.current.shift();
+          redoStackRef.current = [];
+        }
         syncToMarkdownDebounced(next);
         return next;
       });
     },
-    [syncToMarkdownDebounced, cloneBlocks]
+    [cloneBlocks, syncToMarkdownDebounced]
   );
 
   const registerRef = useCallback((id: string, el: HTMLElement | null) => {
-    if (el) {
-      blockRefs.current.set(id, el);
-    } else {
-      blockRefs.current.delete(id);
-    }
-  }, []);
-
-  useEffect(() => {
-    return () => {
-      if (syncTimeoutRef.current) {
-        clearTimeout(syncTimeoutRef.current);
-      }
-    };
+    if (el) blockRefs.current.set(id, el);
+    else blockRefs.current.delete(id);
   }, []);
 
   const getBlockIdFromRange = useCallback((range: Range): string | null => {
@@ -147,41 +165,6 @@ export function useMarkdownEditor(
     if (!sel) return;
     sel.removeAllRanges();
     sel.addRange(savedSelectionRef.current);
-  }, []);
-
-  const getSelectedBlockId = useCallback((): string | null => {
-    const sel = window.getSelection();
-    if (!sel || sel.rangeCount === 0) return null;
-    return getBlockIdFromRange(sel.getRangeAt(0));
-  }, [getBlockIdFromRange]);
-
-  const setCaretOffset = useCallback((el: HTMLElement, offset: number) => {
-    const sel = window.getSelection();
-    if (!sel) return;
-
-    const range = document.createRange();
-    const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
-    let currentOffset = 0;
-    let node = walker.nextNode() as Text | null;
-
-    while (node) {
-      const nodeText = node.nodeValue ?? '';
-      const nextOffset = currentOffset + nodeText.length;
-      if (offset <= nextOffset) {
-        range.setStart(node, Math.max(0, offset - currentOffset));
-        range.collapse(true);
-        sel.removeAllRanges();
-        sel.addRange(range);
-        return;
-      }
-      currentOffset = nextOffset;
-      node = walker.nextNode() as Text | null;
-    }
-
-    range.selectNodeContents(el);
-    range.collapse(false);
-    sel.removeAllRanges();
-    sel.addRange(range);
   }, []);
 
   const placeCaretAfterRender = useCallback((blockId: string, offset: number) => {
@@ -220,6 +203,13 @@ export function useMarkdownEditor(
     });
   }, []);
 
+  const getSelectedBlockId = useCallback((): string | null => {
+    const sel = window.getSelection();
+    if (!sel || sel.rangeCount === 0) return null;
+    return getBlockIdFromRange(sel.getRangeAt(0));
+  }, [getBlockIdFromRange]);
+
+
   const focusBlock = useCallback(
     (idOrIndex: string | number, atEnd = true) => {
       const doFocus = (bl: ParsedBlock[]) => {
@@ -245,11 +235,8 @@ export function useMarkdownEditor(
           }
           sel.removeAllRanges();
           sel.addRange(range);
-        } catch {
-          // ignore
-        }
+        } catch { /* ignore */ }
       };
-
       requestAnimationFrame(() => {
         setBlocks((bl) => {
           doFocus(bl);
@@ -259,37 +246,6 @@ export function useMarkdownEditor(
     },
     []
   );
-
-  const handleArrowNavigation = useCallback(
-    (blockId: string, direction: 'up' | 'down') => {
-      setBlocks((prev) => {
-        const idx = prev.findIndex((b) => b.id === blockId);
-        if (idx === -1) return prev;
-        let targetId: string | undefined;
-        if (direction === 'up' && idx > 0) targetId = prev[idx - 1].id;
-        if (direction === 'down' && idx < prev.length - 1) targetId = prev[idx + 1].id;
-        if (targetId) {
-          requestAnimationFrame(() => {
-            const el = blockRefs.current.get(targetId!);
-            if (el) {
-              el.focus();
-              try {
-                const range = document.createRange();
-                const sel = window.getSelection();
-                range.selectNodeContents(el);
-                range.collapse(direction === 'down');
-                sel?.removeAllRanges();
-                sel?.addRange(range);
-              } catch { /* ignore */ }
-            }
-          });
-        }
-        return prev;
-      });
-    },
-    []
-  );
-
   const handleEnter = useCallback(
     (blockId: string, currentText: string, caretOffset: number) => {
       applyBlocksChange((prev) => {
@@ -311,69 +267,6 @@ export function useMarkdownEditor(
           ...prev.slice(idx + 1),
         ];
         placeCaretAfterRender(newBlock.id, 0);
-        return updated;
-      });
-    },
-    [applyBlocksChange, placeCaretAfterRender]
-  );
-
-  const handleBackspaceOnEmpty = useCallback(
-    (blockId: string) => {
-      applyBlocksChange((prev) => {
-        const idx = prev.findIndex((b) => b.id === blockId);
-        if (idx === -1) return prev;
-        const block = prev[idx];
-        if (block.type !== 'p') {
-          return prev.map((b, i) =>
-            i === idx ? { ...b, type: 'p' as BlockType, text: '', raw: '' } : b
-          );
-        }
-        if (prev.length === 1) return prev;
-        const updated = prev.filter((_, i) => i !== idx);
-        const prevIdx = Math.max(0, idx - 1);
-        const prevBlock = updated[prevIdx];
-        requestAnimationFrame(() => {
-          const el = prevBlock ? blockRefs.current.get(prevBlock.id) : undefined;
-          if (el) {
-            el.focus();
-            try {
-              const range = document.createRange();
-              const sel = window.getSelection();
-              range.selectNodeContents(el);
-              range.collapse(false);
-              sel?.removeAllRanges();
-              sel?.addRange(range);
-            } catch { /* ignore */ }
-          }
-        });
-        return updated;
-      });
-    },
-    [applyBlocksChange]
-  );
-
-  const mergeBlockWithPrevious = useCallback(
-    (blockId: string) => {
-      applyBlocksChange((prev) => {
-        const idx = prev.findIndex((b) => b.id === blockId);
-        if (idx <= 0) return prev;
-        const previous = prev[idx - 1];
-        const current = prev[idx];
-        const previousEl = blockRefs.current.get(previous.id);
-        const caretOffset = previousEl?.textContent?.length ?? previous.text.length;
-        const mergedText = `${previous.text}${current.text}`;
-        const mergedPrevious: ParsedBlock = {
-          ...previous,
-          type: previous.type === 'hr' ? 'p' : previous.type,
-          text: mergedText,
-          raw: mergedText,
-        };
-        const updated = [
-          ...prev.slice(0, idx - 1),
-          mergedPrevious,
-          ...prev.slice(idx + 1),
-        ];
-        placeCaretAfterRender(mergedPrevious.id, caretOffset);
         return updated;
       });
     },
@@ -417,6 +310,229 @@ export function useMarkdownEditor(
     [applyBlocksChange]
   );
 
+  const handleBackspaceOnEmpty = useCallback(
+    (blockId: string) => {
+      applyBlocksChange((prev) => {
+        const idx = prev.findIndex((b) => b.id === blockId);
+        if (idx === -1) return prev;
+        const block = prev[idx];
+        if (block.type !== 'p') {
+          return prev.map((b, i) =>
+            i === idx ? { ...b, type: 'p' as BlockType, text: '', raw: '', language: undefined } : b
+          );
+        }
+        if (prev.length === 1) return prev;
+        const updated = prev.filter((_, i) => i !== idx);
+        const prevIdx = Math.max(0, idx - 1);
+        const prevBlock = updated[prevIdx];
+        requestAnimationFrame(() => {
+          const el = prevBlock ? blockRefs.current.get(prevBlock.id) : undefined;
+          if (el) {
+            el.focus();
+            try {
+              const range = document.createRange();
+              const sel = window.getSelection();
+              range.selectNodeContents(el);
+              range.collapse(false);
+              sel?.removeAllRanges();
+              sel?.addRange(range);
+            } catch { /* ignore */ }
+          }
+        });
+        return updated;
+      });
+    },
+    [applyBlocksChange]
+  );
+
+  const setCaretOffset = useCallback((el: HTMLElement, offset: number) => {
+    const sel = window.getSelection();
+    if (!sel) return;
+
+    const range = document.createRange();
+    const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+    let currentOffset = 0;
+    let node = walker.nextNode() as Text | null;
+
+    while (node) {
+      const nodeText = node.nodeValue ?? '';
+      const nextOffset = currentOffset + nodeText.length;
+      if (offset <= nextOffset) {
+        range.setStart(node, Math.max(0, offset - currentOffset));
+        range.collapse(true);
+        sel.removeAllRanges();
+        sel.addRange(range);
+        return;
+      }
+      currentOffset = nextOffset;
+      node = walker.nextNode() as Text | null;
+    }
+
+    range.selectNodeContents(el);
+    range.collapse(false);
+    sel.removeAllRanges();
+    sel.addRange(range);
+  }, []);
+
+  const mergeBlockWithPrevious = useCallback(
+    (blockId: string) => {
+      applyBlocksChange((prev) => {
+        const idx = prev.findIndex((b) => b.id === blockId);
+        if (idx <= 0) return prev;
+
+        const previous = prev[idx - 1];
+        const current = prev[idx];
+        const previousEl = blockRefs.current.get(previous.id);
+        const caretOffset = previousEl?.textContent?.length ?? previous.text.length;
+        const mergedText = `${previous.text}${current.text}`;
+        const mergedPrevious: ParsedBlock = {
+          ...previous,
+          type: previous.type === 'hr' ? 'p' : previous.type,
+          text: mergedText,
+          raw: mergedText,
+        };
+
+        const updated = [
+          ...prev.slice(0, idx - 1),
+          mergedPrevious,
+          ...prev.slice(idx + 1),
+        ];
+
+        placeCaretAfterRender(mergedPrevious.id, caretOffset);
+
+        return updated;
+      });
+    },
+    [applyBlocksChange, placeCaretAfterRender]
+  );
+
+  const handleArrowNavigation = useCallback(
+    (blockId: string, direction: 'up' | 'down') => {
+      setBlocks((prev) => {
+        const idx = prev.findIndex((b) => b.id === blockId);
+        if (idx === -1) return prev;
+        let targetId: string | undefined;
+        if (direction === 'up' && idx > 0) targetId = prev[idx - 1].id;
+        if (direction === 'down' && idx < prev.length - 1) targetId = prev[idx + 1].id;
+        if (targetId) {
+          requestAnimationFrame(() => {
+            const el = blockRefs.current.get(targetId!);
+            if (el) {
+              el.focus();
+              try {
+                const range = document.createRange();
+                const sel = window.getSelection();
+                range.selectNodeContents(el);
+                range.collapse(direction === 'down');
+                sel?.removeAllRanges();
+                sel?.addRange(range);
+              } catch { /* ignore */ }
+            }
+          });
+        }
+        return prev;
+      });
+    },
+    []
+  );
+  const compressImage = useCallback((file: File): Promise<string> => {
+    return new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const img = new Image();
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          let width = img.naturalWidth;
+          let height = img.naturalHeight;
+          const maxSize = 1024;
+          
+          if (width > maxSize || height > maxSize) {
+            const ratio = Math.min(maxSize / width, maxSize / height);
+            width *= ratio;
+            height *= ratio;
+          }
+          
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          if (ctx) ctx.drawImage(img, 0, 0, width, height);
+
+          const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.7);
+          resolve(compressedDataUrl);
+        };
+        img.onerror = () => {
+          resolve(e.target?.result as string);
+        };
+        img.src = e.target?.result as string;
+      };
+      reader.readAsDataURL(file);
+    });
+  }, []);
+
+  const handleImagePaste = useCallback(
+    (blockId: string, file: File): boolean => {
+      if (!file.type.startsWith('image/')) return false;
+
+      compressImage(file).then((dataUrl) => {
+        const imageBlock: ParsedBlock = {
+          id: newId(),
+          type: 'p',
+          text: `![Pasted image](${dataUrl})`,
+          raw: `![Pasted image](${dataUrl})`,
+        };
+        applyBlocksChange((prev) => {
+          const idx = prev.findIndex((b) => b.id === blockId);
+          const updated = [
+            ...prev.slice(0, idx + 1),
+            imageBlock,
+            ...prev.slice(idx + 1),
+          ];
+          requestAnimationFrame(() => {
+            const el = blockRefs.current.get(imageBlock.id);
+            el?.focus();
+          });
+          return updated;
+        });
+      });
+      return true;
+    },
+    [applyBlocksChange, compressImage]
+  );
+
+  const handleMarkdownPaste = useCallback(
+    (blockId: string, markdownText: string): boolean => {
+      Promise.resolve().then(() => {
+        const pastedBlocks = parseMarkdownToBlocks(markdownText).map((b) => ({
+          ...b,
+          id: newId(),
+        }));
+        if (pastedBlocks.length === 0) return;
+        applyBlocksChange((prev) => {
+          const idx = prev.findIndex((b) => b.id === blockId);
+          if (idx === -1) return prev;
+          const target = prev[idx];
+          const shouldReplaceTarget =
+            !target.text.trim() && (target.type === 'p' || target.type === 'h1');
+          const insertStart = shouldReplaceTarget ? idx : idx + 1;
+          const tailStart = idx + 1;
+          const updated = [
+            ...prev.slice(0, insertStart),
+            ...pastedBlocks,
+            ...prev.slice(tailStart),
+          ];
+          const lastPasted = pastedBlocks[pastedBlocks.length - 1];
+          requestAnimationFrame(() => {
+            const el = blockRefs.current.get(lastPasted.id);
+            el?.focus();
+          });
+          return updated;
+        });
+      });
+      return true;
+    },
+    [applyBlocksChange]
+  );
+
   const applyBlockFormat = useCallback(
     (type: BlockType) => {
       const targetBlockId = focusedBlockId ?? getSelectedBlockId();
@@ -447,113 +563,99 @@ export function useMarkdownEditor(
     [focusedBlockId, getSelectedBlockId, applyBlocksChange]
   );
 
-  const applyInlineFormat = useCallback(
-    (format: 'bold' | 'italic' | 'strikeThrough' | 'code' | 'link', value?: string) => {
-      const activeId = getSelectedBlockId();
-      if (!activeId) return;
-      const el = blockRefs.current.get(activeId);
+  const applyInlineFormat = useCallback((format: string) => {
+    const sel = window.getSelection();
+    if (!sel || sel.rangeCount === 0) return;
+
+    const range = sel.getRangeAt(0);
+    const selectedText = range.toString();
+    if (!selectedText.trim().length) return;
+
+    const startEl =
+      (range.startContainer.nodeType === Node.TEXT_NODE
+        ? range.startContainer.parentElement
+        : (range.startContainer as Element)) ?? null;
+    const endEl =
+      (range.endContainer.nodeType === Node.TEXT_NODE
+        ? range.endContainer.parentElement
+        : (range.endContainer as Element)) ?? null;
+    const startBlock = startEl?.closest('[data-block-id]') as HTMLElement | null;
+    const endBlock = endEl?.closest('[data-block-id]') as HTMLElement | null;
+    if (!startBlock || !endBlock || startBlock !== endBlock) return;
+
+    const blockEl = startBlock;
+    if (!blockEl) return;
+
+    const blockId = blockEl.getAttribute('data-block-id');
+    if (!blockId) return;
+
+    const safe = selectedText
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;');
+
+    if (format === 'bold') {
+      document.execCommand('insertHTML', false, `<strong>${safe}</strong>`);
+    }
+    else if (format === 'italic') {
+      document.execCommand('insertHTML', false, `<em>${safe}</em>`);
+    }
+    else if (format === 'strikethrough') {
+      document.execCommand('insertHTML', false, `<del>${safe}</del>`);
+    }
+    else if (format === 'code') {
+      document.execCommand('insertHTML', false, `<code>${safe}</code>`);
+    } else if (format === 'link') {
+      document.execCommand('insertHTML', false, `<a href="https://">${safe}</a>`);
+    } else {
+      return;
+    }
+    const selectionToRestore = sel.rangeCount > 0 ? sel.getRangeAt(0).cloneRange() : null;
+
+    requestAnimationFrame(() => {
+      const el = blockRefs.current.get(blockId);
       if (!el) return;
-
-      if (format === 'bold') {
-        document.execCommand('bold', false);
-      } else if (format === 'italic') {
-        document.execCommand('italic', false);
-      } else if (format === 'strikeThrough') {
-        document.execCommand('strikeThrough', false);
-      } else if (format === 'code') {
-        const sel = window.getSelection();
-        if (sel && sel.rangeCount > 0) {
-          const range = sel.getRangeAt(0);
-          const txt = range.toString();
-          document.execCommand('insertHTML', false, `<code>${txt}</code>`);
-        }
-      } else if (format === 'link') {
-        const href = value ?? prompt('Enter link URL:');
-        if (href) {
-          document.execCommand('createLink', false, href);
-        }
-      }
-
-      const html = el.innerHTML;
-      applyBlocksChange((prev) => {
-        const block = prev.find((b) => b.id === activeId);
-        if (!block) return prev;
-        const text = block.type === 'table' ? tableDomToMarkdown(el) : htmlToMarkdown(html);
-        return prev.map((b) => (b.id === activeId ? { ...b, text, raw: text } : b));
+      const fullText = tableDomToMarkdown(el) ?? htmlToMarkdown(el.innerHTML);
+      setBlocks((prev) => {
+        const next = prev.map((b) =>
+          b.id === blockId ? { ...b, text: fullText, raw: fullText } : b
+        );
+        syncToMarkdown(next);
+        return next;
       });
-    },
-    [getSelectedBlockId, applyBlocksChange]
-  );
+      setFocusedBlockId(blockId);
 
-  const undo = useCallback(() => {
-    const { past, future } = historyRef.current;
-    if (past.length === 0) return;
-    const previous = past.pop()!;
-    setBlocks((prev) => {
-      future.push(cloneBlocks(prev));
-      syncToMarkdownDebounced(previous);
-      return previous;
-    });
-  }, [cloneBlocks, syncToMarkdownDebounced]);
-
-  const redo = useCallback(() => {
-    const { past, future } = historyRef.current;
-    if (future.length === 0) return;
-    const next = future.pop()!;
-    setBlocks((prev) => {
-      past.push(cloneBlocks(prev));
-      syncToMarkdownDebounced(next);
-      return next;
-    });
-  }, [cloneBlocks, syncToMarkdownDebounced]);
-
-  const clearDocument = useCallback(() => {
-    applyBlocksChange(() => {
-      const first = createBlock('p');
-      placeCaretAfterRender(first.id, 0);
-      return [first];
-    });
-  }, [applyBlocksChange, placeCaretAfterRender]);
-
-  const deleteBlock = useCallback(
-    (blockId: string) => {
-      applyBlocksChange((prev) => {
-        if (prev.length <= 1) {
-          const first = createBlock('p');
-          placeCaretAfterRender(first.id, 0);
-          return [first];
-        }
-        const idx = prev.findIndex((b) => b.id === blockId);
-        if (idx === -1) return prev;
-        const nextIdx = idx === prev.length - 1 ? idx - 1 : idx + 1;
-        const targetFocusBlock = prev[nextIdx];
-        if (targetFocusBlock) {
-          placeCaretAfterRender(targetFocusBlock.id, 0);
-        }
-        return prev.filter((b) => b.id !== blockId);
-      });
-    },
-    [applyBlocksChange, placeCaretAfterRender]
-  );
-
-  const moveBlock = useCallback(
-    (blockId: string, direction: 'up' | 'down') => {
-      applyBlocksChange((prev) => {
-        const idx = prev.findIndex((b) => b.id === blockId);
-        if (idx === -1) return prev;
-        if (direction === 'up' && idx === 0) return prev;
-        if (direction === 'down' && idx === prev.length - 1) return prev;
-
-        const targetIdx = direction === 'up' ? idx - 1 : idx + 1;
-        const current = prev[idx];
-        const target = prev[targetIdx];
-
-        const updated = [...prev];
-        updated[idx] = target;
-        updated[targetIdx] = current;
-
+      if (selectionToRestore) {
         requestAnimationFrame(() => {
-          const el = blockRefs.current.get(blockId);
+          const sel = window.getSelection();
+          if (sel) {
+            try {
+              sel.removeAllRanges();
+              sel.addRange(selectionToRestore);
+              savedSelectionRef.current = selectionToRestore.cloneRange();
+            } catch {
+            }
+          }
+        });
+      }
+    });
+  }, [syncToMarkdown]);
+  const insertBlock = useCallback(
+    (type: BlockType, text = '') => {
+      const insertAfter = focusedBlockId;
+      applyBlocksChange((prev) => {
+        const idx = insertAfter
+          ? prev.findIndex((b) => b.id === insertAfter)
+          : prev.length - 1;
+        const newBlock = createBlock(type, text);
+        if (type === 'code') newBlock.language = 'plaintext';
+        const updated = [
+          ...prev.slice(0, idx + 1),
+          newBlock,
+          ...prev.slice(idx + 1),
+        ];
+        requestAnimationFrame(() => {
+          const el = blockRefs.current.get(newBlock.id);
           if (el) {
             el.focus();
             try {
@@ -566,38 +668,133 @@ export function useMarkdownEditor(
             } catch { /* ignore */ }
           }
         });
+        return updated;
+      });
+    },
+    [focusedBlockId, applyBlocksChange]
+  );
 
+  const moveBlock = useCallback(
+    (blockId: string, dir: 'up' | 'down') => {
+      applyBlocksChange((prev) => {
+        const idx = prev.findIndex((b) => b.id === blockId);
+        if (idx === -1) return prev;
+        if (dir === 'up' && idx === 0) return prev;
+        if (dir === 'down' && idx === prev.length - 1) return prev;
+        const updated = [...prev];
+        const swapIdx = dir === 'up' ? idx - 1 : idx + 1;
+        [updated[idx], updated[swapIdx]] = [updated[swapIdx], updated[idx]];
         return updated;
       });
     },
     [applyBlocksChange]
   );
 
+  const deleteBlock = useCallback(
+    (blockId: string) => {
+      applyBlocksChange((prev) => {
+        if (prev.length === 1) {
+          return [createBlock('h1', '')];
+        }
+        const idx = prev.findIndex((b) => b.id === blockId);
+        const updated = prev.filter((b) => b.id !== blockId);
+        const focusIdx = Math.max(0, idx - 1);
+        requestAnimationFrame(() => {
+          const target = updated[focusIdx];
+          if (target) {
+            const el = blockRefs.current.get(target.id);
+            el?.focus();
+          }
+        });
+        return updated;
+      });
+    },
+    [applyBlocksChange]
+  );
+
+  const updateCodeLanguage = useCallback(
+    (blockId: string, language: string) => {
+      applyBlocksChange((prev) =>
+        prev.map((b) =>
+          b.id === blockId ? { ...b, language: language.trim() ? language : undefined } : b
+        )
+      );
+    },
+    [applyBlocksChange]
+  );
+  const clearDocument = useCallback(() => {
+    applyBlocksChange(() => [createBlock('h1', '')]);
+    setFocusedBlockId(null);
+  }, [applyBlocksChange]);
+
+  const undo = useCallback(() => {
+    setBlocks((prev) => {
+      const previous = undoStackRef.current.pop();
+      if (!previous) return prev;
+      isApplyingHistoryRef.current = true;
+      redoStackRef.current.push(cloneBlocks(prev));
+      const restored = cloneBlocks(previous);
+      syncToMarkdown(restored);
+      isApplyingHistoryRef.current = false;
+      return restored;
+    });
+    setFocusedBlockId(null);
+  }, [cloneBlocks, syncToMarkdown]);
+
+  const redo = useCallback(() => {
+    setBlocks((prev) => {
+      const next = redoStackRef.current.pop();
+      if (!next) return prev;
+      isApplyingHistoryRef.current = true;
+      undoStackRef.current.push(cloneBlocks(prev));
+      const restored = cloneBlocks(next);
+      syncToMarkdown(restored);
+      isApplyingHistoryRef.current = false;
+      return restored;
+    });
+    setFocusedBlockId(null);
+  }, [cloneBlocks, syncToMarkdown]);
+
+  const loadContent = useCallback((docId: string, content: string) => {
+    const parsed = parseWithCache(docId, content);
+    setBlocks(parsed);
+    setFocusedBlockId(null);
+    undoStackRef.current = [];
+    redoStackRef.current = [];
+  }, [parseWithCache]);
+
+  useEffect(() => {
+    return () => {
+
+      if (syncTimeoutRef.current) {
+        clearTimeout(syncTimeoutRef.current);
+      }
+    };
+  }, []);
+
   return {
     blocks,
-    setBlocks,
     focusedBlockId,
     setFocusedBlockId,
     registerRef,
-    syncToMarkdownDebounced,
-    getBlockIdFromRange,
     saveCurrentSelection,
     restoreCurrentSelection,
-    getSelectedBlockId,
-    setCaretOffset,
-    placeCaretAfterRender,
-    focusBlock,
-    handleArrowNavigation,
     handleEnter,
+    handleTextChange,
     handleBackspaceOnEmpty,
     mergeBlockWithPrevious,
-    handleTextChange,
+    handleArrowNavigation,
+    handleImagePaste,
+    handleMarkdownPaste,
     applyBlockFormat,
     applyInlineFormat,
+    insertBlock,
+    moveBlock,
+    deleteBlock,
+    updateCodeLanguage,
+    clearDocument,
     undo,
     redo,
-    clearDocument,
-    deleteBlock,
-    moveBlock,
+    loadContent,
   };
 }

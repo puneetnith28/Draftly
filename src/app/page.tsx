@@ -1,146 +1,267 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { useDocuments } from '@/hooks/useDocuments';
 import { usePreferences } from '@/hooks/usePreferences';
-import { Sidebar } from '@/components/Sidebar';
-import { TopBar } from '@/components/TopBar';
 import { Editor } from '@/components/Editor/Editor';
+import { TopBar } from '@/components/TopBar';
+import { ExportModal } from '@/components/modals/ExportModal';
+import { NewFolderModal } from '@/components/modals/NewFolderModal';
 import { PreferencesModal } from '@/components/modals/PreferencesModal';
-import {
-  exportToMarkdown,
-  exportToHtml,
-  exportToPdf,
-  exportToRtf,
-  exportToDocx,
-} from '@/lib/exportUtils';
-import { registerServiceWorker, unregisterServiceWorker } from '@/lib/serviceWorkerRegistration';
 import { InstallPwaButton } from '@/components/InstallPwaButton';
+import { registerServiceWorker, unregisterServiceWorker } from '@/lib/serviceWorkerRegistration';
+import { Sidebar } from '@/components/Sidebar';
 
-export default function Home() {
+function useDebouncedCallback<T extends (...args: never[]) => void>(
+  fn: T,
+  delay: number
+): T {
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  return useCallback(
+    ((...args: Parameters<T>) => {
+      if (timer.current) clearTimeout(timer.current);
+      timer.current = setTimeout(() => fn(...args), delay);
+    }) as T,
+    [fn, delay]
+  );
+}
+
+function getWordCount(content: string): number {
+  const trimmed = content.trim();
+  if (!trimmed) return 0;
+  return trimmed.split(/\s+/).filter(Boolean).length;
+}
+
+export default function NotesApp() {
   const {
     documents,
     folders,
-    activeDocId,
     activeDocument,
+    activeDocId,
     isLoaded,
-    setActiveDocId,
-    createDocument,
     updateDocument,
+    createDocument,
+    openDocument,
     deleteDocument,
-    duplicateDocument,
     createFolder,
     renameFolder,
+    updateFolder,
+    reorderFolders,
+    reorderDocuments,
     deleteFolder,
-    moveDocumentToFolder,
   } = useDocuments();
 
-  const { preferences, updatePreference } = usePreferences();
+  const {
+    preferences,
+    isLoaded: prefsLoaded,
+    updatePreferences,
+    contentWidthPx,
+    fontCss,
+  } = usePreferences();
 
-  const [sidebarOpen, setSidebarOpen] = useState(true);
-  const [preferencesOpen, setPreferencesOpen] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [exportOpen, setExportOpen] = useState(false);
+  const [newFolderOpen, setNewFolderOpen] = useState(false);
+  const [editingFolderId, setEditingFolderId] = useState<string | null>(null);
+  const [prefsOpen, setPrefsOpen] = useState(false);
+  const [isMobileViewport, setIsMobileViewport] = useState(false);
   const [savingStatus, setSavingStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
+  const savingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     if (process.env.NODE_ENV === 'production') {
       registerServiceWorker();
       return;
     }
+
     void unregisterServiceWorker();
   }, []);
 
-  const handleTitleChange = (id: string, title: string) => {
-    updateDocument(id, { title });
-  };
+  useEffect(() => {
+    const media = window.matchMedia('(max-width: 900px)');
+    const update = () => setIsMobileViewport(media.matches);
+    update();
+    media.addEventListener('change', update);
+    return () => media.removeEventListener('change', update);
+  }, []);
 
-  const handleEditorChange = (markdown: string) => {
-    if (!activeDocument) return;
-    setSavingStatus('saving');
-    updateDocument(activeDocument.id, { content: markdown });
-    
-    setTimeout(() => {
+  const debouncedSave = useDebouncedCallback(
+    (id: string, content: string) => {
+      setSavingStatus('saving');
+      updateDocument(id, { content });
       setSavingStatus('saved');
-      setTimeout(() => {
+      if (savingTimeoutRef.current) clearTimeout(savingTimeoutRef.current);
+      savingTimeoutRef.current = setTimeout(() => {
         setSavingStatus('idle');
-      }, 1000);
-    }, 400);
-  };
+      }, 1500);
+    },
+    400
+  );
 
-  const handleExport = (format: 'md' | 'html' | 'pdf' | 'rtf' | 'docx') => {
-    if (!activeDocument) return;
-    const title = activeDocument.title || 'Untitled';
-    const content = activeDocument.content;
+  const handleContentChange = useCallback(
+    (markdown: string) => {
+      if (!activeDocId) return;
+      setSavingStatus('saving');
+      debouncedSave(activeDocId, markdown);
+    },
+    [activeDocId, debouncedSave]
+  );
 
-    switch (format) {
-      case 'md':
-        exportToMarkdown(title, content);
-        break;
-      case 'html':
-        exportToHtml(title, content);
-        break;
-      case 'pdf':
-        exportToPdf(title, content);
-        break;
-      case 'rtf':
-        exportToRtf(title, content);
-        break;
-      case 'docx':
-        exportToDocx(title, content);
-        break;
-    }
-  };
+  const handleTitleChange = useCallback(
+    (title: string) => {
+      if (!activeDocId) return;
+      updateDocument(activeDocId, { title });
+    },
+    [activeDocId, updateDocument]
+  );
 
-  if (!isLoaded) {
+  const handleExportDoc = useCallback(() => {
+    setExportOpen(true);
+  }, []);
+
+  const activeWordCount = activeDocument ? getWordCount(activeDocument.content) : 0;
+
+  const handleSidebarExport = useCallback(
+    (id: string) => {
+      openDocument(id);
+      setExportOpen(true);
+    },
+    [openDocument]
+  );
+
+  if (!isLoaded || !prefsLoaded) {
     return (
-      <div className="flex h-screen w-screen items-center justify-center bg-[#f7f6f3] text-[#1a1916] dark:bg-[#141413] dark:text-[#e8e6e1]">
-        <div className="text-lg font-medium animate-pulse">Loading Draftly...</div>
+      <div
+        style={{
+          height: '100dvh',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          background: 'var(--bg-app)',
+        }}
+      >
+        <div
+          style={{
+            width: '20px',
+            height: '20px',
+            borderRadius: '50%',
+            border: '2px solid var(--border-default)',
+            borderTopColor: 'var(--accent)',
+            animation: 'spin 0.7s linear infinite',
+          }}
+        />
+        <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
       </div>
     );
   }
 
   return (
-    <div className="app-container">
+    <div
+      style={{
+        height: '100dvh',
+        display: 'flex',
+        flexDirection: 'row',
+        overflow: 'hidden',
+        background: 'var(--bg-app)',
+      }}
+    >
       <Sidebar
-        folders={folders}
+        isOpen={sidebarOpen}
+        isMobile={isMobileViewport}
         documents={documents}
-        activeDocumentId={activeDocId}
-        onSelectDocument={setActiveDocId}
-        onCreateDocument={createDocument}
-        onCreateFolder={createFolder}
-        onUpdateFolder={(id, updates) => updates.name && renameFolder(id, updates.name)}
-        onDeleteFolder={deleteFolder}
-        onMoveDocument={moveDocumentToFolder}
+        folders={folders}
+        activeDocId={activeDocId}
+        onClose={() => setSidebarOpen(false)}
+        onOpen={openDocument}
+        onCreate={(folderId: string | null | undefined) => {
+          createDocument(folderId ?? null);
+        }}
+        onCreateFolder={() => {
+          setEditingFolderId(null);
+          setNewFolderOpen(true);
+        }}
+        onEditFolder={(id: string) => {
+          setEditingFolderId(id);
+          setNewFolderOpen(true);
+        }}
+        onReorderFolders={reorderFolders}
+        onReorderDocuments={reorderDocuments}
+        onDelete={deleteDocument}
+        onExport={handleSidebarExport}
       />
 
-      <div className={`main-content ${!sidebarOpen ? 'w-full' : ''}`}>
+      <div
+        style={{
+          flex: 1,
+          minWidth: 0,
+          minHeight: 0,
+          display: 'flex',
+          flexDirection: 'column',
+          overflow: 'hidden',
+        }}
+      >
         <TopBar
-          activeDocument={activeDocument}
+          title={activeDocument?.title ?? 'Untitled'}
           onTitleChange={handleTitleChange}
+          onMenuToggle={() => setSidebarOpen((v) => !v)}
+          isSidebarOpen={sidebarOpen}
+          wordCount={activeWordCount}
+          onExport={handleExportDoc}
+          onPreferences={() => setPrefsOpen(true)}
           savingStatus={savingStatus}
-          onToggleSidebar={() => setSidebarOpen(!sidebarOpen)}
-          onOpenPreferences={() => setPreferencesOpen(true)}
-          onExport={handleExport}
         />
 
-        {activeDocument ? (
+        {activeDocument && (
           <Editor
-            key={activeDocument.id}
-            initialContent={activeDocument.content}
-            onChange={handleEditorChange}
+            docId={activeDocument.id}
+            content={activeDocument.content}
+            contentWidth={contentWidthPx}
+            fontCss={fontCss}
+            sidebarOffset={!isMobileViewport && sidebarOpen ? 300 : 0}
+            onChange={handleContentChange}
           />
-        ) : (
-          <div className="flex flex-1 items-center justify-center text-sm text-[#a09e98]">
-            No document selected. Create or select a document in the sidebar.
-          </div>
         )}
       </div>
 
-      <PreferencesModal
-        isOpen={preferencesOpen}
-        onClose={() => setPreferencesOpen(false)}
-        preferences={preferences}
-        updatePreference={updatePreference}
+      <ExportModal
+        isOpen={exportOpen}
+        document={activeDocument}
+        onClose={() => setExportOpen(false)}
       />
+
+      <NewFolderModal
+        isOpen={newFolderOpen}
+        mode={editingFolderId ? 'edit' : 'create'}
+        initialName={editingFolderId ? (folders.find((item) => item.id === editingFolderId)?.name ?? '') : ''}
+        initialColor={editingFolderId ? (folders.find((item) => item.id === editingFolderId)?.color ?? undefined) : undefined}
+        onClose={() => setNewFolderOpen(false)}
+        onSubmit={(name, color) => {
+          if (editingFolderId) {
+            updateFolder(editingFolderId, { name, color });
+          } else {
+            createFolder(name, color);
+          }
+          setNewFolderOpen(false);
+        }}
+        onDelete={editingFolderId ? () => {
+          const folder = folders.find((item) => item.id === editingFolderId);
+          if (!folder) return;
+          const confirmed = window.confirm(
+            `Delete folder "${folder.name}"? Documents in it will move to No Folder.`
+          );
+          if (!confirmed) return;
+          deleteFolder(editingFolderId);
+          setNewFolderOpen(false);
+        } : undefined}
+      />
+
+      <PreferencesModal
+        isOpen={prefsOpen}
+        preferences={preferences}
+        onClose={() => setPrefsOpen(false)}
+        onUpdate={updatePreferences}
+      />
+
       <InstallPwaButton />
     </div>
   );

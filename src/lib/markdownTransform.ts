@@ -108,11 +108,12 @@ function nextBlockId(): string {
 }
 
 export function parseMarkdownToBlocks(markdown: string): ParsedBlock[] {
-  if (!markdown.trim()) {
+  const md = typeof markdown === 'string' ? markdown : '';
+  if (!md.trim()) {
     return [{ id: nextBlockId(), type: 'h1', text: '', raw: '' }];
   }
 
-  const lines = markdown.split('\n');
+  const lines = md.split('\n');
   const blocks: ParsedBlock[] = [];
   let i = 0;
 

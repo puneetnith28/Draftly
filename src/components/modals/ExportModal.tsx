@@ -4,10 +4,10 @@ import React, { useEffect, useRef } from 'react';
 import { Document } from '@/hooks/useDocuments';
 import { ParsedBlock, parseMarkdownToBlocks } from '@/lib/markdownTransform';
 import {
-  exportAsMarkdown,
-  exportAsPdf,
-  exportAsRtf,
-  exportAsDocx,
+  exportToMarkdown,
+  exportToPdf,
+  exportToRtf,
+  exportToDocx,
 } from '@/lib/exportUtils';
 
 interface ExportModalProps {
@@ -91,16 +91,16 @@ export function ExportModal({ isOpen, document, onClose }: ExportModalProps) {
 
     switch (format) {
       case 'md':
-        exportAsMarkdown(title, document.content);
+        exportToMarkdown(title, document.content);
         break;
       case 'pdf':
-        exportAsPdf(title, blocks);
+        exportToPdf(title, blocks);
         break;
       case 'rtf':
-        exportAsRtf(title, blocks);
+        exportToRtf(title, blocks);
         break;
       case 'docx':
-        await exportAsDocx(title, blocks);
+        await exportToDocx(title, blocks);
         break;
     }
     onClose();
