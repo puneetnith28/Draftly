@@ -804,7 +804,7 @@ export function Sidebar({
             textAlign: 'center',
           }}
         >
-          Draftly, built with 🧃 by @puneetnith28.<br/>
+          Draftly, built with ❤️ by @puneetnith28.<br/>
         </div>
       </div>
     </aside>

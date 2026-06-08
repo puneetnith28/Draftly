@@ -140,6 +140,20 @@ html, body {
   .editor-doc-container {
     padding: 36px 20px 180px 20px;
   }
+
+  .block-gutter {
+    left: -18px;
+    width: 16px;
+  }
+
+  .block-type-badge {
+    display: none;
+  }
+
+  .block-handle {
+    width: 16px;
+    height: 16px;
+  }
 }
 
 .editor-bottom-spacer {

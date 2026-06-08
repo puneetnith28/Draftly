@@ -159,15 +159,18 @@ interface TBtnProps {
 function TBtn({ title, action, IconComponent, isActive, onAction, isMobile }: TBtnProps) {
   const buttonSize = isMobile ? 38 : 30;
   const iconSize = isMobile ? 18 : 15;
+  const lastTouchTimeRef = useRef<number>(0);
 
   return (
     <button
       title={title}
       onMouseDown={(e) => {
+        if (Date.now() - lastTouchTimeRef.current < 800) return;
         e.preventDefault();
         onAction(action);
       }}
       onTouchStart={(e) => {
+        lastTouchTimeRef.current = Date.now();
         e.preventDefault();
         onAction(action);
       }}
@@ -211,6 +214,10 @@ export function FloatingToolbar({ focusedBlockId, blocks, sidebarOffset, onActio
   const headingRef = useRef<HTMLDivElement>(null);
   const blockTypeRef = useRef<HTMLDivElement>(null);
 
+  const blockTypeTouchRef = useRef<number>(0);
+  const headingTouchRef = useRef<number>(0);
+  const lastDropdownTouchTimeRef = useRef<number>(0);
+
   const focusedBlock = blocks.find((b) => b.id === focusedBlockId) ?? null;
   const currentType = focusedBlock?.type ?? 'p';
 
@@ -240,7 +247,7 @@ export function FloatingToolbar({ focusedBlockId, blocks, sidebarOffset, onActio
     ul: 'List', ol: 'Ordered', quote: 'Quote', code: 'Code', table: 'Table', hr: 'Rule',
   };
   const currentLabel = blockTypeLabels[currentType] ?? 'Text';
-  const showExtendedMobileActions = !isMobile;
+  const showExtendedMobileActions = true;
 
   const dropdownItemStyle: React.CSSProperties = {
     display: 'flex',
@@ -261,261 +268,416 @@ export function FloatingToolbar({ focusedBlockId, blocks, sidebarOffset, onActio
   };
 
   return (
-    <div
-      className="floating-toolbar glass"
-      onMouseDown={(e) => {
-        onToolbarInteract?.();
-        e.preventDefault();
-      }}
-      onTouchStart={(e) => {
-        onToolbarInteract?.();
-        e.preventDefault();
-      }}
-      style={{
-        position: 'fixed',
-        left: `calc(50% + ${sidebarOffset / 2}px)`,
-        transform: 'translateX(-50%)',
-        bottom: 'max(16px, env(safe-area-inset-bottom))',
-        zIndex: 80,
-        background: 'var(--bg-toolbar)',
-        border: '1px solid var(--border-default)',
-        borderRadius: '12px',
-        padding: '5px 6px',
-        display: 'flex',
-        alignItems: 'center',
-        gap: '1px',
-        boxShadow: 'var(--shadow-toolbar)',
-      }}
-    >
-      <div ref={blockTypeRef} style={{ position: 'relative' }}>
-        <button
-          title="Block type"
-          onMouseDown={(e) => { e.preventDefault(); setBlockTypeOpen((v) => !v); setHeadingOpen(false); }}
-          onTouchStart={(e) => { e.preventDefault(); setBlockTypeOpen((v) => !v); setHeadingOpen(false); }}
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '3px',
-            padding: '5px 8px',
-            borderRadius: '6px',
-            border: 'none',
-            background: blockTypeOpen ? 'var(--bg-active)' : 'transparent',
-            color: blockTypeOpen ? 'var(--accent)' : 'var(--text-secondary)',
-            cursor: 'pointer',
-            fontSize: '12px',
-            fontFamily: 'var(--font-ui)',
-            fontWeight: '600',
-            transition: 'all 0.1s ease',
-            minWidth: '52px',
-            justifyContent: 'space-between',
-          }}
-          onMouseEnter={(e) => { if (!blockTypeOpen) (e.currentTarget as HTMLButtonElement).style.background = 'var(--bg-hover)'; }}
-          onMouseLeave={(e) => { if (!blockTypeOpen) (e.currentTarget as HTMLButtonElement).style.background = 'transparent'; }}
-        >
-          <span style={{ color: 'var(--text-primary)' }}>{currentLabel}</span>
-          <IconChevronDown />
-        </button>
-
-        {blockTypeOpen && (
-          <div
-            style={{
-              position: 'absolute',
-              bottom: 'calc(100% + 8px)',
-              left: '0',
-              background: 'var(--bg-toolbar)',
-              border: '1px solid var(--border-default)',
-              borderRadius: '10px',
-              boxShadow: 'var(--shadow-modal)',
-              padding: '6px',
-              display: 'flex',
-              flexDirection: 'column',
-              gap: '1px',
-              minWidth: '150px',
-              backdropFilter: 'blur(12px)',
-              WebkitBackdropFilter: 'blur(12px)',
+    <>
+      <div
+        className="floating-toolbar glass"
+        onMouseDown={(e) => {
+          onToolbarInteract?.();
+          e.preventDefault();
+        }}
+        onTouchStart={(e) => {
+          onToolbarInteract?.();
+          e.preventDefault();
+        }}
+        style={{
+          position: 'fixed',
+          left: isMobile ? '8px' : `calc(50% + ${sidebarOffset / 2}px)`,
+          right: isMobile ? '8px' : 'auto',
+          transform: isMobile ? 'none' : 'translateX(-50%)',
+          bottom: 'max(16px, env(safe-area-inset-bottom))',
+          zIndex: 80,
+          background: 'var(--bg-toolbar)',
+          border: '1px solid var(--border-default)',
+          borderRadius: '12px',
+          padding: '5px 6px',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '1px',
+          boxShadow: 'var(--shadow-toolbar)',
+          maxWidth: isMobile ? 'calc(100vw - 16px)' : 'none',
+          overflowX: isMobile ? 'auto' : 'visible',
+          whiteSpace: 'nowrap',
+        }}
+      >
+        <div ref={blockTypeRef} style={{ position: 'relative', flexShrink: 0 }}>
+          <button
+            title="Block type"
+            onMouseDown={(e) => {
+              if (Date.now() - blockTypeTouchRef.current < 800) return;
+              e.preventDefault();
+              setBlockTypeOpen((v) => !v);
+              setHeadingOpen(false);
             }}
-          >
-            {([
-              { type: 'p', label: 'Paragraph', desc: 'Regular text' },
-              { type: 'quote', label: 'Quote', desc: 'Block quote' },
-              { type: 'ul', label: 'Bullet list', desc: 'Unordered list' },
-              { type: 'ol', label: 'Numbered list', desc: 'Ordered list' },
-              { type: 'code', label: 'Code block', desc: 'Monospace code' },
-            ] as { type: string; label: string; desc: string }[]).map((item) => (
-              <button
-                key={item.type}
-                onMouseDown={(e) => {
-                  e.preventDefault();
-                  onAction(item.type);
-                  setBlockTypeOpen(false);
-                }}
-                onTouchStart={(e) => {
-                  e.preventDefault();
-                  onAction(item.type);
-                  setBlockTypeOpen(false);
-                }}
-                style={{
-                  ...dropdownItemStyle,
-                  background: currentType === item.type ? 'var(--bg-active)' : 'transparent',
-                  color: currentType === item.type ? 'var(--accent)' : 'var(--text-primary)',
-                }}
-                onMouseEnter={(e) => {
-                  if (currentType !== item.type) (e.currentTarget as HTMLButtonElement).style.background = 'var(--bg-hover)';
-                }}
-                onMouseLeave={(e) => {
-                  (e.currentTarget as HTMLButtonElement).style.background =
-                    currentType === item.type ? 'var(--bg-active)' : 'transparent';
-                }}
-              >
-                <span style={{ flex: 1 }}>{item.label}</span>
-                <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{item.desc}</span>
-              </button>
-            ))}
-          </div>
-        )}
-      </div>
-
-      <div ref={headingRef} style={{ position: 'relative' }}>
-        <button
-          title="Heading"
-          onMouseDown={(e) => { e.preventDefault(); setHeadingOpen((v) => !v); setBlockTypeOpen(false); }}
-          onTouchStart={(e) => { e.preventDefault(); setHeadingOpen((v) => !v); setBlockTypeOpen(false); }}
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '2px',
-            padding: '5px 7px',
-            borderRadius: '6px',
-            border: 'none',
-            background: headingOpen || /^h[1-6]$/.test(currentType) ? 'var(--bg-active)' : 'transparent',
-            color: headingOpen || /^h[1-6]$/.test(currentType) ? 'var(--accent)' : 'var(--text-secondary)',
-            cursor: 'pointer',
-            fontSize: '12px',
-            fontFamily: 'var(--font-ui)',
-            fontWeight: '600',
-            transition: 'all 0.1s ease',
-          }}
-          onMouseEnter={(e) => {
-            if (!headingOpen && !/^h[1-6]$/.test(currentType))
-              (e.currentTarget as HTMLButtonElement).style.background = 'var(--bg-hover)';
-          }}
-          onMouseLeave={(e) => {
-            if (!headingOpen && !/^h[1-6]$/.test(currentType))
-              (e.currentTarget as HTMLButtonElement).style.background = 'transparent';
-          }}
-        >
-          <span style={{ fontWeight: '700', fontSize: '13px' }}>H</span>
-          <IconChevronDown />
-        </button>
-
-        {headingOpen && (
-          <div
-            style={{
-              position: 'absolute',
-              bottom: 'calc(100% + 8px)',
-              left: '50%',
-              transform: 'translateX(-50%)',
-              background: 'var(--bg-toolbar)',
-              border: '1px solid var(--border-default)',
-              borderRadius: '10px',
-              boxShadow: 'var(--shadow-modal)',
-              padding: '6px',
-              display: 'flex',
-              flexDirection: 'column',
-              gap: '1px',
-              minWidth: '140px',
-              backdropFilter: 'blur(12px)',
-              WebkitBackdropFilter: 'blur(12px)',
+            onTouchStart={(e) => {
+              blockTypeTouchRef.current = Date.now();
+              e.preventDefault();
+              setBlockTypeOpen((v) => !v);
+              setHeadingOpen(false);
             }}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '3px',
+              padding: '5px 8px',
+              borderRadius: '6px',
+              border: 'none',
+              background: blockTypeOpen ? 'var(--bg-active)' : 'transparent',
+              color: blockTypeOpen ? 'var(--accent)' : 'var(--text-secondary)',
+              cursor: 'pointer',
+              fontSize: '12px',
+              fontFamily: 'var(--font-ui)',
+              fontWeight: '600',
+              transition: 'all 0.1s ease',
+              minWidth: '52px',
+              justifyContent: 'space-between',
+            }}
+            onMouseEnter={(e) => { if (!blockTypeOpen) (e.currentTarget as HTMLButtonElement).style.background = 'var(--bg-hover)'; }}
+            onMouseLeave={(e) => { if (!blockTypeOpen) (e.currentTarget as HTMLButtonElement).style.background = 'transparent'; }}
           >
-            {[1, 2, 3, 4, 5, 6].map((level) => {
-              const hType = `h${level}`;
-              const isActive = currentType === hType;
-              return (
+            <span style={{ color: 'var(--text-primary)' }}>{currentLabel}</span>
+            <IconChevronDown />
+          </button>
+
+          {!isMobile && blockTypeOpen && (
+            <div
+              style={{
+                position: 'absolute',
+                bottom: 'calc(100% + 8px)',
+                left: '0',
+                background: 'var(--bg-toolbar)',
+                border: '1px solid var(--border-default)',
+                borderRadius: '10px',
+                boxShadow: 'var(--shadow-modal)',
+                padding: '6px',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '1px',
+                minWidth: '150px',
+                backdropFilter: 'blur(12px)',
+                WebkitBackdropFilter: 'blur(12px)',
+                zIndex: 90,
+              }}
+            >
+              {([
+                { type: 'p', label: 'Paragraph', desc: 'Regular text' },
+                { type: 'quote', label: 'Quote', desc: 'Block quote' },
+                { type: 'ul', label: 'Bullet list', desc: 'Unordered list' },
+                { type: 'ol', label: 'Numbered list', desc: 'Ordered list' },
+                { type: 'code', label: 'Code block', desc: 'Monospace code' },
+              ] as { type: string; label: string; desc: string }[]).map((item) => (
                 <button
-                  key={level}
+                  key={item.type}
                   onMouseDown={(e) => {
+                    if (Date.now() - lastDropdownTouchTimeRef.current < 800) return;
                     e.preventDefault();
-                    onAction(hType);
-                    setHeadingOpen(false);
+                    onAction(item.type);
+                    setBlockTypeOpen(false);
                   }}
                   onTouchStart={(e) => {
+                    lastDropdownTouchTimeRef.current = Date.now();
                     e.preventDefault();
-                    onAction(hType);
-                    setHeadingOpen(false);
+                    onAction(item.type);
+                    setBlockTypeOpen(false);
                   }}
                   style={{
                     ...dropdownItemStyle,
-                    fontSize: level === 1 ? '16px' : level === 2 ? '14px' : '13px',
-                    fontWeight: level <= 3 ? '700' : '600',
-                    background: isActive ? 'var(--bg-active)' : 'transparent',
-                    color: isActive ? 'var(--accent)' : 'var(--text-primary)',
+                    background: currentType === item.type ? 'var(--bg-active)' : 'transparent',
+                    color: currentType === item.type ? 'var(--accent)' : 'var(--text-primary)',
                   }}
                   onMouseEnter={(e) => {
-                    if (!isActive) (e.currentTarget as HTMLButtonElement).style.background = 'var(--bg-hover)';
+                    if (currentType !== item.type) (e.currentTarget as HTMLButtonElement).style.background = 'var(--bg-hover)';
                   }}
                   onMouseLeave={(e) => {
-                    (e.currentTarget as HTMLButtonElement).style.background = isActive ? 'var(--bg-active)' : 'transparent';
+                    (e.currentTarget as HTMLButtonElement).style.background =
+                      currentType === item.type ? 'var(--bg-active)' : 'transparent';
                   }}
                 >
-                  <span style={{ color: 'var(--text-muted)', fontSize: '11px', fontWeight: '700', minWidth: '22px' }}>
-                    H{level}
-                  </span>
-                  Heading {level}
+                  <span style={{ flex: 1 }}>{item.label}</span>
+                  <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{item.desc}</span>
                 </button>
-              );
-            })}
-          </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div ref={headingRef} style={{ position: 'relative', flexShrink: 0 }}>
+          <button
+            title="Heading"
+            onMouseDown={(e) => {
+              if (Date.now() - headingTouchRef.current < 800) return;
+              e.preventDefault();
+              setHeadingOpen((v) => !v);
+              setBlockTypeOpen(false);
+            }}
+            onTouchStart={(e) => {
+              headingTouchRef.current = Date.now();
+              e.preventDefault();
+              setHeadingOpen((v) => !v);
+              setBlockTypeOpen(false);
+            }}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '2px',
+              padding: '5px 7px',
+              borderRadius: '6px',
+              border: 'none',
+              background: headingOpen || /^h[1-6]$/.test(currentType) ? 'var(--bg-active)' : 'transparent',
+              color: headingOpen || /^h[1-6]$/.test(currentType) ? 'var(--accent)' : 'var(--text-secondary)',
+              cursor: 'pointer',
+              fontSize: '12px',
+              fontFamily: 'var(--font-ui)',
+              fontWeight: '600',
+              transition: 'all 0.1s ease',
+            }}
+            onMouseEnter={(e) => {
+              if (!headingOpen && !/^h[1-6]$/.test(currentType))
+                (e.currentTarget as HTMLButtonElement).style.background = 'var(--bg-hover)';
+            }}
+            onMouseLeave={(e) => {
+              if (!headingOpen && !/^h[1-6]$/.test(currentType))
+                (e.currentTarget as HTMLButtonElement).style.background = 'transparent';
+            }}
+          >
+            <span style={{ fontWeight: '700', fontSize: '13px' }}>H</span>
+            <IconChevronDown />
+          </button>
+
+          {!isMobile && headingOpen && (
+            <div
+              style={{
+                position: 'absolute',
+                bottom: 'calc(100% + 8px)',
+                left: '50%',
+                transform: 'translateX(-50%)',
+                background: 'var(--bg-toolbar)',
+                border: '1px solid var(--border-default)',
+                borderRadius: '10px',
+                boxShadow: 'var(--shadow-modal)',
+                padding: '6px',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '1px',
+                minWidth: '140px',
+                backdropFilter: 'blur(12px)',
+                WebkitBackdropFilter: 'blur(12px)',
+                zIndex: 90,
+              }}
+            >
+              {[1, 2, 3, 4, 5, 6].map((level) => {
+                const hType = `h${level}`;
+                const isActive = currentType === hType;
+                return (
+                  <button
+                    key={level}
+                    onMouseDown={(e) => {
+                      if (Date.now() - lastDropdownTouchTimeRef.current < 800) return;
+                      e.preventDefault();
+                      onAction(hType);
+                      setHeadingOpen(false);
+                    }}
+                    onTouchStart={(e) => {
+                      lastDropdownTouchTimeRef.current = Date.now();
+                      e.preventDefault();
+                      onAction(hType);
+                      setHeadingOpen(false);
+                    }}
+                    style={{
+                      ...dropdownItemStyle,
+                      fontSize: level === 1 ? '16px' : level === 2 ? '14px' : '13px',
+                      fontWeight: level <= 3 ? '700' : '600',
+                      background: isActive ? 'var(--bg-active)' : 'transparent',
+                      color: isActive ? 'var(--accent)' : 'var(--text-primary)',
+                    }}
+                    onMouseEnter={(e) => {
+                      if (!isActive) (e.currentTarget as HTMLButtonElement).style.background = 'var(--bg-hover)';
+                    }}
+                    onMouseLeave={(e) => {
+                      (e.currentTarget as HTMLButtonElement).style.background = isActive ? 'var(--bg-active)' : 'transparent';
+                    }}
+                  >
+                    <span style={{ color: 'var(--text-muted)', fontSize: '11px', fontWeight: '700', minWidth: '22px' }}>
+                      H{level}
+                    </span>
+                    Heading {level}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        <Divider />
+
+        <TBtn title="Bold (Ctrl+B)" action="bold" IconComponent={IconBold} onAction={onAction} isMobile={isMobile} />
+        <TBtn title="Italic (Ctrl+I)" action="italic" IconComponent={IconItalic} onAction={onAction} isMobile={isMobile} />
+        <TBtn title="Strikethrough" action="strikethrough" IconComponent={IconStrikethrough} onAction={onAction} isMobile={isMobile} />
+        {showExtendedMobileActions && (
+          <>
+            <TBtn title="Inline Code" action="code" IconComponent={IconCode} onAction={onAction} isMobile={isMobile} />
+            <TBtn title="Link" action="link" IconComponent={IconLink} onAction={onAction} isMobile={isMobile} />
+          </>
+        )}
+
+        <Divider />
+
+        <TBtn
+          title="Blockquote"
+          action="quote"
+          IconComponent={IconQuote}
+          isActive={currentType === 'quote'}
+          onAction={onAction}
+          isMobile={isMobile}
+        />
+        <TBtn
+          title="Bullet List"
+          action="ul"
+          IconComponent={IconUL}
+          isActive={currentType === 'ul'}
+          onAction={onAction}
+          isMobile={isMobile}
+        />
+        <TBtn
+          title="Numbered List"
+          action="ol"
+          IconComponent={IconOL}
+          isActive={currentType === 'ol'}
+          onAction={onAction}
+          isMobile={isMobile}
+        />
+
+        {showExtendedMobileActions && (
+          <>
+            <Divider />
+            <TBtn title="Table" action="table" IconComponent={IconTable} onAction={onAction} isMobile={isMobile} />
+            <TBtn title="Image" action="image" IconComponent={IconImage} onAction={onAction} isMobile={isMobile} />
+            <TBtn title="Divider" action="hr" IconComponent={IconHR} onAction={onAction} isMobile={isMobile} />
+          </>
         )}
       </div>
 
-      <Divider />
-
-      <TBtn title="Bold (Ctrl+B)" action="bold" IconComponent={IconBold} onAction={onAction} isMobile={isMobile} />
-      <TBtn title="Italic (Ctrl+I)" action="italic" IconComponent={IconItalic} onAction={onAction} isMobile={isMobile} />
-      <TBtn title="Strikethrough" action="strikethrough" IconComponent={IconStrikethrough} onAction={onAction} isMobile={isMobile} />
-      {showExtendedMobileActions && (
-        <>
-          <TBtn title="Inline Code" action="code" IconComponent={IconCode} onAction={onAction} isMobile={isMobile} />
-          <TBtn title="Link" action="link" IconComponent={IconLink} onAction={onAction} isMobile={isMobile} />
-        </>
+      {isMobile && blockTypeOpen && (
+        <div
+          style={{
+            position: 'fixed',
+            bottom: 'calc(max(16px, env(safe-area-inset-bottom)) + 48px)',
+            left: '12px',
+            background: 'var(--bg-toolbar)',
+            border: '1px solid var(--border-default)',
+            borderRadius: '10px',
+            boxShadow: 'var(--shadow-modal)',
+            padding: '6px',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '1px',
+            minWidth: '150px',
+            backdropFilter: 'blur(12px)',
+            WebkitBackdropFilter: 'blur(12px)',
+            zIndex: 90,
+          }}
+        >
+          {([
+            { type: 'p', label: 'Paragraph', desc: 'Regular text' },
+            { type: 'quote', label: 'Quote', desc: 'Block quote' },
+            { type: 'ul', label: 'Bullet list', desc: 'Unordered list' },
+            { type: 'ol', label: 'Numbered list', desc: 'Ordered list' },
+            { type: 'code', label: 'Code block', desc: 'Monospace code' },
+          ] as { type: string; label: string; desc: string }[]).map((item) => (
+            <button
+              key={item.type}
+              onMouseDown={(e) => {
+                if (Date.now() - lastDropdownTouchTimeRef.current < 800) return;
+                e.preventDefault();
+                onAction(item.type);
+                setBlockTypeOpen(false);
+              }}
+              onTouchStart={(e) => {
+                lastDropdownTouchTimeRef.current = Date.now();
+                e.preventDefault();
+                onAction(item.type);
+                setBlockTypeOpen(false);
+              }}
+              style={{
+                ...dropdownItemStyle,
+                background: currentType === item.type ? 'var(--bg-active)' : 'transparent',
+                color: currentType === item.type ? 'var(--accent)' : 'var(--text-primary)',
+              }}
+              onMouseEnter={(e) => {
+                if (currentType !== item.type) (e.currentTarget as HTMLButtonElement).style.background = 'var(--bg-hover)';
+              }}
+              onMouseLeave={(e) => {
+                (e.currentTarget as HTMLButtonElement).style.background =
+                  currentType === item.type ? 'var(--bg-active)' : 'transparent';
+              }}
+            >
+              <span style={{ flex: 1 }}>{item.label}</span>
+              <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{item.desc}</span>
+            </button>
+          ))}
+        </div>
       )}
 
-      <Divider />
-
-      <TBtn
-        title="Blockquote"
-        action="quote"
-        IconComponent={IconQuote}
-        isActive={currentType === 'quote'}
-        onAction={onAction}
-        isMobile={isMobile}
-      />
-      <TBtn
-        title="Bullet List"
-        action="ul"
-        IconComponent={IconUL}
-        isActive={currentType === 'ul'}
-        onAction={onAction}
-        isMobile={isMobile}
-      />
-      <TBtn
-        title="Numbered List"
-        action="ol"
-        IconComponent={IconOL}
-        isActive={currentType === 'ol'}
-        onAction={onAction}
-        isMobile={isMobile}
-      />
-
-      {showExtendedMobileActions && (
-        <>
-          <Divider />
-          <TBtn title="Table" action="table" IconComponent={IconTable} onAction={onAction} isMobile={isMobile} />
-          <TBtn title="Image" action="image" IconComponent={IconImage} onAction={onAction} isMobile={isMobile} />
-          <TBtn title="Divider" action="hr" IconComponent={IconHR} onAction={onAction} isMobile={isMobile} />
-        </>
+      {isMobile && headingOpen && (
+        <div
+          style={{
+            position: 'fixed',
+            bottom: 'calc(max(16px, env(safe-area-inset-bottom)) + 48px)',
+            left: '60px',
+            background: 'var(--bg-toolbar)',
+            border: '1px solid var(--border-default)',
+            borderRadius: '10px',
+            boxShadow: 'var(--shadow-modal)',
+            padding: '6px',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '1px',
+            minWidth: '140px',
+            backdropFilter: 'blur(12px)',
+            WebkitBackdropFilter: 'blur(12px)',
+            zIndex: 90,
+          }}
+        >
+          {[1, 2, 3, 4, 5, 6].map((level) => {
+            const hType = `h${level}`;
+            const isActive = currentType === hType;
+            return (
+              <button
+                key={level}
+                onMouseDown={(e) => {
+                  if (Date.now() - lastDropdownTouchTimeRef.current < 800) return;
+                  e.preventDefault();
+                  onAction(hType);
+                  setHeadingOpen(false);
+                }}
+                onTouchStart={(e) => {
+                  lastDropdownTouchTimeRef.current = Date.now();
+                  e.preventDefault();
+                  onAction(hType);
+                  setHeadingOpen(false);
+                }}
+                style={{
+                  ...dropdownItemStyle,
+                  fontSize: level === 1 ? '16px' : level === 2 ? '14px' : '13px',
+                  fontWeight: level <= 3 ? '700' : '600',
+                  background: isActive ? 'var(--bg-active)' : 'transparent',
+                  color: isActive ? 'var(--accent)' : 'var(--text-primary)',
+                }}
+                onMouseEnter={(e) => {
+                  if (!isActive) (e.currentTarget as HTMLButtonElement).style.background = 'var(--bg-hover)';
+                }}
+                onMouseLeave={(e) => {
+                  (e.currentTarget as HTMLButtonElement).style.background = isActive ? 'var(--bg-active)' : 'transparent';
+                }}
+              >
+                <span style={{ color: 'var(--text-muted)', fontSize: '11px', fontWeight: '700', minWidth: '22px' }}>
+                  H{level}
+                </span>
+                Heading {level}
+              </button>
+            );
+          })}
+        </div>
       )}
-    </div>
+    </>
   );
 }
