@@ -15,6 +15,9 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "Draftly",
   description: "A distraction-free markdown notes editor",
+  icons: {
+    icon: "/icon.svg",
+  },
   manifest: "/manifest.json",
   appleWebApp: {
     capable: true,
