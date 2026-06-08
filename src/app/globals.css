@@ -751,3 +751,80 @@ html, body {
   pointer-events: none;
 }
 
+.mobile-delete-confirm-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: var(--bg-toolbar);
+  border: 1.5px solid rgba(255, 69, 58, 0.4);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 16px;
+  z-index: 100;
+  animation: mobileOverlayFadeIn 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes mobileOverlayFadeIn {
+  from {
+    opacity: 0;
+    transform: scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.mobile-delete-confirm-overlay span {
+  font-weight: 600;
+  color: #ff453a;
+  font-size: 14px;
+  font-family: var(--font-ui), system-ui, -apple-system, sans-serif;
+}
+
+.mobile-delete-confirm-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.confirm-delete-btn {
+  background: #ff453a;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  padding: 6px 12px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: 0 2px 4px rgba(255, 69, 58, 0.2);
+  transition: all 0.15s ease;
+}
+
+.confirm-delete-btn:active {
+  transform: scale(0.95);
+  background: #e03b30;
+}
+
+.cancel-delete-btn {
+  background: var(--bg-toolbar);
+  color: var(--text-primary);
+  border: 1px solid var(--border-default);
+  border-radius: 6px;
+  padding: 6px 12px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.cancel-delete-btn:active {
+  transform: scale(0.95);
+  background: var(--bg-active);
+}
+

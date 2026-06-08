@@ -78,6 +78,11 @@ export function useMarkdownEditor(
   const parseCacheRef = useRef<Map<string, { content: string; blocks: ParsedBlock[] }>>(new Map());
   const skipNextSyncRef = useRef(true);
 
+  const onChangeRef = useRef(onChange);
+  useEffect(() => {
+    onChangeRef.current = onChange;
+  }, [onChange]);
+
   const cloneBlocks = useCallback((items: ParsedBlock[]) => items.map((b) => ({ ...b })), []);
 
   const parseWithCache = useCallback(
@@ -97,9 +102,9 @@ export function useMarkdownEditor(
 
   const syncToMarkdown = useCallback(
     (updated: ParsedBlock[]) => {
-      onChange(blocksToMarkdown(updated));
+      onChangeRef.current(blocksToMarkdown(updated));
     },
-    [onChange]
+    []
   );
 
   const syncTimeoutRef = useRef<NodeJS.Timeout | null>(null);

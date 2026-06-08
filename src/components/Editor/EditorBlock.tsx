@@ -326,8 +326,61 @@ export const EditorBlock = React.memo(function EditorBlock({
     el.focus();
   }, [block.id, onFocus]);
 
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const touchTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const touchStartPosRef = useRef<{ x: number; y: number } | null>(null);
+
+  const handleTouchStart = useCallback((e: React.TouchEvent) => {
+    const media = window.matchMedia('(max-width: 900px)');
+    if (!media.matches) return;
+
+    const target = e.target as HTMLElement;
+    if (target.closest('button, input, select, textarea, a, .table-cell-input, [contenteditable="true"]')) {
+      return;
+    }
+
+    const touch = e.touches[0];
+    touchStartPosRef.current = { x: touch.clientX, y: touch.clientY };
+
+    if (touchTimerRef.current) clearTimeout(touchTimerRef.current);
+    touchTimerRef.current = setTimeout(() => {
+      if (typeof window !== 'undefined' && navigator.vibrate) {
+        navigator.vibrate(50);
+      }
+      setShowDeleteConfirm(true);
+      touchTimerRef.current = null;
+    }, 700);
+  }, []);
+
+  const handleTouchMove = useCallback((e: React.TouchEvent) => {
+    if (!touchStartPosRef.current) return;
+    const touch = e.touches[0];
+    const dx = touch.clientX - touchStartPosRef.current.x;
+    const dy = touch.clientY - touchStartPosRef.current.y;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    if (dist > 10) {
+      if (touchTimerRef.current) {
+        clearTimeout(touchTimerRef.current);
+        touchTimerRef.current = null;
+      }
+    }
+  }, []);
+
+  const handleTouchEnd = useCallback((e: React.TouchEvent) => {
+    if (touchTimerRef.current) {
+      clearTimeout(touchTimerRef.current);
+      touchTimerRef.current = null;
+      
+      const target = e.target as HTMLElement;
+      if (!target.closest('button, input, select, textarea, a, .table-cell-input, [contenteditable="true"]')) {
+        focusEditableBlock();
+      }
+    }
+    touchStartPosRef.current = null;
+  }, [focusEditableBlock]);
+
   const handleWrapperPress = useCallback(
-    (e: React.MouseEvent<HTMLDivElement> | React.TouchEvent<HTMLDivElement>) => {
+    (e: React.MouseEvent<HTMLDivElement>) => {
       const target = e.target as HTMLElement;
       if (target.closest('button, input, select, textarea, a, [contenteditable="true"]')) {
         return;
@@ -405,6 +458,14 @@ export const EditorBlock = React.memo(function EditorBlock({
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
+        touchHoldProps={{
+          onTouchStart: handleTouchStart,
+          onTouchMove: handleTouchMove,
+          onTouchEnd: handleTouchEnd,
+          onTouchCancel: handleTouchEnd,
+        }}
+        showDeleteConfirm={showDeleteConfirm}
+        setShowDeleteConfirm={setShowDeleteConfirm}
       />
     );
   }
@@ -423,6 +484,10 @@ export const EditorBlock = React.memo(function EditorBlock({
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
+        onTouchCancel={handleTouchEnd}
       >
         <BlockGutter
           blockType={block.type} isHovered={isHovered} isFocused={isFocused}
@@ -435,6 +500,15 @@ export const EditorBlock = React.memo(function EditorBlock({
           onMouseLeaveHandle={() => { if (!isDragging) setIsDraggable(false); }}
         />
         <hr className="editor-hr" />
+        {showDeleteConfirm && (
+          <div className="mobile-delete-confirm-overlay glass" onClick={(e) => e.stopPropagation()}>
+            <span>Delete divider?</span>
+            <div className="mobile-delete-confirm-actions">
+              <button className="confirm-delete-btn" onClick={() => { onDeleteBlock(block.id); setShowDeleteConfirm(false); }}>Delete</button>
+              <button className="cancel-delete-btn" onClick={() => setShowDeleteConfirm(false)}>Cancel</button>
+            </div>
+          </div>
+        )}
       </div>
     );
   }
@@ -696,6 +770,10 @@ export const EditorBlock = React.memo(function EditorBlock({
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
+        onTouchCancel={handleTouchEnd}
       >
         <BlockGutter
           blockType={block.type} isHovered={isHovered} isFocused={isFocused}
@@ -734,6 +812,15 @@ export const EditorBlock = React.memo(function EditorBlock({
             registerRef={setRef}
           />
         </div>
+        {showDeleteConfirm && (
+          <div className="mobile-delete-confirm-overlay glass" onClick={(e) => e.stopPropagation()}>
+            <span>Delete code block?</span>
+            <div className="mobile-delete-confirm-actions">
+              <button className="confirm-delete-btn" onClick={() => { onDeleteBlock(block.id); setShowDeleteConfirm(false); }}>Delete</button>
+              <button className="cancel-delete-btn" onClick={() => setShowDeleteConfirm(false)}>Cancel</button>
+            </div>
+          </div>
+        )}
       </div>
     );
   }
@@ -755,7 +842,11 @@ export const EditorBlock = React.memo(function EditorBlock({
     return (
       <div className={wrapperClassName}
         onMouseEnter={() => setIsHovered(true)} onMouseLeave={() => setIsHovered(false)}
-        onMouseDown={handleWrapperPress} onTouchStart={handleWrapperPress}
+        onMouseDown={handleWrapperPress}
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
+        onTouchCancel={handleTouchEnd}
         draggable={isDraggable}
         onDragStart={handleDragStart}
         onDragEnd={handleDragEnd}
@@ -765,6 +856,15 @@ export const EditorBlock = React.memo(function EditorBlock({
       >
         <BlockGutter {...gutterProps} />
         <ul className="editor-list-wrap">{React.createElement('li', contentProps as never)}</ul>
+        {showDeleteConfirm && (
+          <div className="mobile-delete-confirm-overlay glass" onClick={(e) => e.stopPropagation()}>
+            <span>Delete block?</span>
+            <div className="mobile-delete-confirm-actions">
+              <button className="confirm-delete-btn" onClick={() => { onDeleteBlock(block.id); setShowDeleteConfirm(false); }}>Delete</button>
+              <button className="cancel-delete-btn" onClick={() => setShowDeleteConfirm(false)}>Cancel</button>
+            </div>
+          </div>
+        )}
       </div>
     );
   }
@@ -772,7 +872,11 @@ export const EditorBlock = React.memo(function EditorBlock({
     return (
       <div className={wrapperClassName}
         onMouseEnter={() => setIsHovered(true)} onMouseLeave={() => setIsHovered(false)}
-        onMouseDown={handleWrapperPress} onTouchStart={handleWrapperPress}
+        onMouseDown={handleWrapperPress}
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
+        onTouchCancel={handleTouchEnd}
         draggable={isDraggable}
         onDragStart={handleDragStart}
         onDragEnd={handleDragEnd}
@@ -787,6 +891,15 @@ export const EditorBlock = React.memo(function EditorBlock({
           </span>
           {React.createElement('div', contentProps as never)}
         </div>
+        {showDeleteConfirm && (
+          <div className="mobile-delete-confirm-overlay glass" onClick={(e) => e.stopPropagation()}>
+            <span>Delete block?</span>
+            <div className="mobile-delete-confirm-actions">
+              <button className="confirm-delete-btn" onClick={() => { onDeleteBlock(block.id); setShowDeleteConfirm(false); }}>Delete</button>
+              <button className="cancel-delete-btn" onClick={() => setShowDeleteConfirm(false)}>Cancel</button>
+            </div>
+          </div>
+        )}
       </div>
     );
   }
@@ -794,7 +907,11 @@ export const EditorBlock = React.memo(function EditorBlock({
   return (
     <div className={wrapperClassName}
       onMouseEnter={() => setIsHovered(true)} onMouseLeave={() => setIsHovered(false)}
-      onMouseDown={handleWrapperPress} onTouchStart={handleWrapperPress}
+      onMouseDown={handleWrapperPress}
+      onTouchStart={handleTouchStart}
+      onTouchMove={handleTouchMove}
+      onTouchEnd={handleTouchEnd}
+      onTouchCancel={handleTouchEnd}
       draggable={isDraggable}
       onDragStart={handleDragStart}
       onDragEnd={handleDragEnd}
@@ -804,6 +921,15 @@ export const EditorBlock = React.memo(function EditorBlock({
     >
       <BlockGutter {...gutterProps} />
       {React.createElement(tag, contentProps as never)}
+      {showDeleteConfirm && (
+        <div className="mobile-delete-confirm-overlay glass" onClick={(e) => e.stopPropagation()}>
+          <span>Delete block?</span>
+          <div className="mobile-delete-confirm-actions">
+            <button className="confirm-delete-btn" onClick={() => { onDeleteBlock(block.id); setShowDeleteConfirm(false); }}>Delete</button>
+            <button className="cancel-delete-btn" onClick={() => setShowDeleteConfirm(false)}>Cancel</button>
+          </div>
+        </div>
+      )}
     </div>
   );
 });
@@ -940,6 +1066,15 @@ interface TableBlockProps {
   onDragOver: (e: React.DragEvent) => void;
   onDragLeave: () => void;
   onDrop: (e: React.DragEvent) => void;
+
+  touchHoldProps: {
+    onTouchStart: (e: React.TouchEvent) => void;
+    onTouchMove: (e: React.TouchEvent) => void;
+    onTouchEnd: (e: React.TouchEvent) => void;
+    onTouchCancel: (e: React.TouchEvent) => void;
+  };
+  showDeleteConfirm: boolean;
+  setShowDeleteConfirm: (v: boolean) => void;
 }
 
 function parseTableToMatrix(raw: string): { headers: string[]; rows: string[][] } {
@@ -968,6 +1103,7 @@ function TableBlock({
   onFocus, onTextChange, onMoveBlock, onDeleteBlock, registerRef,
   isDraggable, setIsDraggable, isDragging, setIsDragging, dropPosition, setDropPosition,
   onDragStart, onDragEnd, onDragOver, onDragLeave, onDrop,
+  touchHoldProps, showDeleteConfirm, setShowDeleteConfirm,
 }: TableBlockProps) {
   const parsed = useMemo(() => parseTableToMatrix(block.text), [block.text]);
   const [headers, setHeaders] = useState(parsed.headers);
@@ -997,6 +1133,10 @@ function TableBlock({
       onDragOver={onDragOver}
       onDragLeave={onDragLeave}
       onDrop={onDrop}
+      onTouchStart={touchHoldProps.onTouchStart}
+      onTouchMove={touchHoldProps.onTouchMove}
+      onTouchEnd={touchHoldProps.onTouchEnd}
+      onTouchCancel={touchHoldProps.onTouchCancel}
     >
       <BlockGutter
         blockType="table" isHovered={isHovered} isFocused={isFocused}
@@ -1130,6 +1270,15 @@ function TableBlock({
           </div>
         )}
       </div>
+      {showDeleteConfirm && (
+        <div className="mobile-delete-confirm-overlay glass" onClick={(e) => e.stopPropagation()}>
+          <span>Delete table?</span>
+          <div className="mobile-delete-confirm-actions">
+            <button className="confirm-delete-btn" onClick={() => { onDeleteBlock(block.id); setShowDeleteConfirm(false); }}>Delete</button>
+            <button className="cancel-delete-btn" onClick={() => setShowDeleteConfirm(false)}>Cancel</button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
