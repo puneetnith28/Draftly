@@ -76,6 +76,7 @@ export function useMarkdownEditor(
   const isApplyingHistoryRef = useRef(false);
   const savedSelectionRef = useRef<Range | null>(null);
   const parseCacheRef = useRef<Map<string, { content: string; blocks: ParsedBlock[] }>>(new Map());
+  const skipNextSyncRef = useRef(true);
 
   const cloneBlocks = useCallback((items: ParsedBlock[]) => items.map((b) => ({ ...b })), []);
 
@@ -112,6 +113,14 @@ export function useMarkdownEditor(
     [syncToMarkdown]
   );
 
+  useEffect(() => {
+    if (skipNextSyncRef.current) {
+      skipNextSyncRef.current = false;
+      return;
+    }
+    syncToMarkdownDebounced(blocks);
+  }, [blocks, syncToMarkdownDebounced]);
+
   const applyBlocksChange = useCallback(
     (updater: (prev: ParsedBlock[]) => ParsedBlock[]) => {
       setBlocks((prev) => {
@@ -122,11 +131,10 @@ export function useMarkdownEditor(
           if (undoStackRef.current.length > 200) undoStackRef.current.shift();
           redoStackRef.current = [];
         }
-        syncToMarkdownDebounced(next);
         return next;
       });
     },
-    [cloneBlocks, syncToMarkdownDebounced]
+    [cloneBlocks]
   );
 
   const registerRef = useCallback((id: string, el: HTMLElement | null) => {
@@ -617,11 +625,9 @@ export function useMarkdownEditor(
       if (!el) return;
       const fullText = tableDomToMarkdown(el) ?? htmlToMarkdown(el.innerHTML);
       setBlocks((prev) => {
-        const next = prev.map((b) =>
+        return prev.map((b) =>
           b.id === blockId ? { ...b, text: fullText, raw: fullText } : b
         );
-        syncToMarkdown(next);
-        return next;
       });
       setFocusedBlockId(blockId);
 
@@ -689,6 +695,25 @@ export function useMarkdownEditor(
     },
     [applyBlocksChange]
   );
+  const moveBlockToPosition = useCallback(
+    (draggedId: string, targetId: string, position: 'before' | 'after') => {
+      applyBlocksChange((prev) => {
+        const draggedIdx = prev.findIndex((b) => b.id === draggedId);
+        const targetIdx = prev.findIndex((b) => b.id === targetId);
+        if (draggedIdx === -1 || targetIdx === -1 || draggedIdx === targetIdx) return prev;
+
+        const updated = prev.filter((b) => b.id !== draggedId);
+        let insertIdx = updated.findIndex((b) => b.id === targetId);
+        if (position === 'after') {
+          insertIdx += 1;
+        }
+        updated.splice(insertIdx, 0, prev[draggedIdx]);
+        return updated;
+      });
+    },
+    [applyBlocksChange]
+  );
+
 
   const deleteBlock = useCallback(
     (blockId: string) => {
@@ -734,12 +759,11 @@ export function useMarkdownEditor(
       isApplyingHistoryRef.current = true;
       redoStackRef.current.push(cloneBlocks(prev));
       const restored = cloneBlocks(previous);
-      syncToMarkdown(restored);
       isApplyingHistoryRef.current = false;
       return restored;
     });
     setFocusedBlockId(null);
-  }, [cloneBlocks, syncToMarkdown]);
+  }, [cloneBlocks]);
 
   const redo = useCallback(() => {
     setBlocks((prev) => {
@@ -748,15 +772,15 @@ export function useMarkdownEditor(
       isApplyingHistoryRef.current = true;
       undoStackRef.current.push(cloneBlocks(prev));
       const restored = cloneBlocks(next);
-      syncToMarkdown(restored);
       isApplyingHistoryRef.current = false;
       return restored;
     });
     setFocusedBlockId(null);
-  }, [cloneBlocks, syncToMarkdown]);
+  }, [cloneBlocks]);
 
   const loadContent = useCallback((docId: string, content: string) => {
     const parsed = parseWithCache(docId, content);
+    skipNextSyncRef.current = true;
     setBlocks(parsed);
     setFocusedBlockId(null);
     undoStackRef.current = [];
@@ -790,6 +814,7 @@ export function useMarkdownEditor(
     applyInlineFormat,
     insertBlock,
     moveBlock,
+    moveBlockToPosition,
     deleteBlock,
     updateCodeLanguage,
     clearDocument,

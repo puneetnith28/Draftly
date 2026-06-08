@@ -715,3 +715,39 @@ html, body {
 }
 .icon-btn:hover { background: var(--bg-hover); color: var(--text-primary); }
 .icon-btn.active { background: var(--bg-active); color: var(--accent); }
+
+.editor-block-wrapper {
+  position: relative;
+}
+
+.editor-block-wrapper.is-dragging {
+  opacity: 0.4;
+  background: var(--bg-hover) !important;
+}
+
+.editor-block-wrapper.drop-top::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: -3px;
+  height: 4px;
+  background: var(--accent);
+  border-radius: 2px;
+  z-index: 10;
+  pointer-events: none;
+}
+
+.editor-block-wrapper.drop-bottom::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -3px;
+  height: 4px;
+  background: var(--accent);
+  border-radius: 2px;
+  z-index: 10;
+  pointer-events: none;
+}
+
