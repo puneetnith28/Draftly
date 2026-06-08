@@ -63,6 +63,7 @@ export default function NotesApp() {
   const [exportOpen, setExportOpen] = useState(false);
   const [newFolderOpen, setNewFolderOpen] = useState(false);
   const [editingFolderId, setEditingFolderId] = useState<string | null>(null);
+  const [parentFolderId, setParentFolderId] = useState<string | null>(null);
   const [prefsOpen, setPrefsOpen] = useState(false);
   const [isMobileViewport, setIsMobileViewport] = useState(false);
   const [savingStatus, setSavingStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
@@ -176,8 +177,9 @@ export default function NotesApp() {
         onCreate={(folderId: string | null | undefined) => {
           createDocument(folderId ?? null);
         }}
-        onCreateFolder={() => {
+        onCreateFolder={(parentId?: string | null) => {
           setEditingFolderId(null);
+          setParentFolderId(parentId ?? null);
           setNewFolderOpen(true);
         }}
         onEditFolder={(id: string) => {
@@ -239,7 +241,7 @@ export default function NotesApp() {
           if (editingFolderId) {
             updateFolder(editingFolderId, { name, color });
           } else {
-            createFolder(name, color);
+            createFolder(name, color, parentFolderId);
           }
           setNewFolderOpen(false);
         }}
@@ -247,7 +249,7 @@ export default function NotesApp() {
           const folder = folders.find((item) => item.id === editingFolderId);
           if (!folder) return;
           const confirmed = window.confirm(
-            `Delete folder "${folder.name}"? Documents in it will move to No Folder.`
+            `Delete folder "${folder.name}"? Documents and subfolders in it will move to its parent level.`
           );
           if (!confirmed) return;
           deleteFolder(editingFolderId);
