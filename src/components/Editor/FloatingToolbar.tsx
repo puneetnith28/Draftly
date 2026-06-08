@@ -160,6 +160,7 @@ function TBtn({ title, action, IconComponent, isActive, onAction, isMobile }: TB
   const buttonSize = isMobile ? 38 : 30;
   const iconSize = isMobile ? 18 : 15;
   const lastTouchTimeRef = useRef<number>(0);
+  const touchStartPosRef = useRef<{ x: number; y: number } | null>(null);
 
   return (
     <button
@@ -170,9 +171,21 @@ function TBtn({ title, action, IconComponent, isActive, onAction, isMobile }: TB
         onAction(action);
       }}
       onTouchStart={(e) => {
+        const touch = e.touches[0];
+        touchStartPosRef.current = { x: touch.clientX, y: touch.clientY };
+      }}
+      onTouchEnd={(e) => {
         lastTouchTimeRef.current = Date.now();
-        e.preventDefault();
-        onAction(action);
+        if (!touchStartPosRef.current) return;
+        const touch = e.changedTouches[0];
+        const dx = touch.clientX - touchStartPosRef.current.x;
+        const dy = touch.clientY - touchStartPosRef.current.y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        if (dist < 10) {
+          e.preventDefault();
+          onAction(action);
+        }
+        touchStartPosRef.current = null;
       }}
       style={{
         display: 'flex',
@@ -217,6 +230,9 @@ export function FloatingToolbar({ focusedBlockId, blocks, sidebarOffset, onActio
   const blockTypeTouchRef = useRef<number>(0);
   const headingTouchRef = useRef<number>(0);
   const lastDropdownTouchTimeRef = useRef<number>(0);
+
+  const blockTypeTouchStartPosRef = useRef<{ x: number; y: number } | null>(null);
+  const headingTouchStartPosRef = useRef<{ x: number; y: number } | null>(null);
 
   const focusedBlock = blocks.find((b) => b.id === focusedBlockId) ?? null;
   const currentType = focusedBlock?.type ?? 'p';
@@ -277,7 +293,6 @@ export function FloatingToolbar({ focusedBlockId, blocks, sidebarOffset, onActio
         }}
         onTouchStart={(e) => {
           onToolbarInteract?.();
-          e.preventDefault();
         }}
         style={{
           position: 'fixed',
@@ -309,10 +324,22 @@ export function FloatingToolbar({ focusedBlockId, blocks, sidebarOffset, onActio
               setHeadingOpen(false);
             }}
             onTouchStart={(e) => {
+              const touch = e.touches[0];
+              blockTypeTouchStartPosRef.current = { x: touch.clientX, y: touch.clientY };
+            }}
+            onTouchEnd={(e) => {
               blockTypeTouchRef.current = Date.now();
-              e.preventDefault();
-              setBlockTypeOpen((v) => !v);
-              setHeadingOpen(false);
+              if (!blockTypeTouchStartPosRef.current) return;
+              const touch = e.changedTouches[0];
+              const dx = touch.clientX - blockTypeTouchStartPosRef.current.x;
+              const dy = touch.clientY - blockTypeTouchStartPosRef.current.y;
+              const dist = Math.sqrt(dx * dx + dy * dy);
+              if (dist < 10) {
+                e.preventDefault();
+                setBlockTypeOpen((v) => !v);
+                setHeadingOpen(false);
+              }
+              blockTypeTouchStartPosRef.current = null;
             }}
             style={{
               display: 'flex',
@@ -410,10 +437,22 @@ export function FloatingToolbar({ focusedBlockId, blocks, sidebarOffset, onActio
               setBlockTypeOpen(false);
             }}
             onTouchStart={(e) => {
+              const touch = e.touches[0];
+              headingTouchStartPosRef.current = { x: touch.clientX, y: touch.clientY };
+            }}
+            onTouchEnd={(e) => {
               headingTouchRef.current = Date.now();
-              e.preventDefault();
-              setHeadingOpen((v) => !v);
-              setBlockTypeOpen(false);
+              if (!headingTouchStartPosRef.current) return;
+              const touch = e.changedTouches[0];
+              const dx = touch.clientX - headingTouchStartPosRef.current.x;
+              const dy = touch.clientY - headingTouchStartPosRef.current.y;
+              const dist = Math.sqrt(dx * dx + dy * dy);
+              if (dist < 10) {
+                e.preventDefault();
+                setHeadingOpen((v) => !v);
+                setBlockTypeOpen(false);
+              }
+              headingTouchStartPosRef.current = null;
             }}
             style={{
               display: 'flex',

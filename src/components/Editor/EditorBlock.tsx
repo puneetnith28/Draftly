@@ -34,9 +34,75 @@ interface EditorBlockProps {
   onUndo: () => void;
   onRedo: () => void;
   onMoveBlock: (id: string, dir: 'up' | 'down') => void;
+  onMoveBlockToPosition?: (draggedId: string, targetId: string, position: 'before' | 'after') => void;
   onDeleteBlock: (id: string) => void;
   registerRef: (id: string, el: HTMLElement | null) => void;
+
+  slashMenuOpen?: boolean;
+  activeSlashBlockId?: string | null;
+  onSlashTrigger?: (blockId: string, el: HTMLElement, query: string) => void;
+  onSlashClose?: () => void;
+  onSlashMenuKey?: (key: string) => void;
 }
+
+function checkInputRules(el: HTMLElement) {
+  const sel = window.getSelection();
+  if (!sel || sel.rangeCount === 0 || !sel.isCollapsed) return;
+  const range = sel.getRangeAt(0);
+  const textNode = range.startContainer;
+  if (textNode.nodeType !== Node.TEXT_NODE) return;
+
+  const text = textNode.textContent ?? '';
+  const offset = range.startOffset;
+  const beforeCaret = text.slice(0, offset);
+
+  const boldMatch = beforeCaret.match(/\*\*(?!\s)([^*]+)\*\*\s$/);
+  const italicMatch = beforeCaret.match(/\*(?!\s)([^*]+)\*\s$/);
+  const codeMatch = beforeCaret.match(/`([^`]+)`\s$/);
+  const match = boldMatch || italicMatch || codeMatch;
+  if (!match) return;
+
+  const matchedString = match[0];
+  const contentText = match[1];
+  const matchStart = offset - matchedString.length;
+
+  const parentNode = textNode.parentNode;
+  if (!parentNode) return;
+
+  const afterText = text.slice(offset);
+  const frag = document.createDocumentFragment();
+  
+  if (matchStart > 0) {
+    frag.appendChild(document.createTextNode(text.slice(0, matchStart)));
+  }
+
+  let styledEl: HTMLElement;
+  if (boldMatch) {
+    styledEl = document.createElement('strong');
+  } else if (italicMatch) {
+    styledEl = document.createElement('em');
+  } else {
+    styledEl = document.createElement('code');
+  }
+  styledEl.textContent = contentText;
+  frag.appendChild(styledEl);
+
+  const spaceNode = document.createTextNode('\u00A0');
+  frag.appendChild(spaceNode);
+
+  if (afterText.length > 0) {
+    frag.appendChild(document.createTextNode(afterText));
+  }
+
+  parentNode.replaceChild(frag, textNode);
+
+  const newRange = document.createRange();
+  newRange.setStartAfter(spaceNode);
+  newRange.collapse(true);
+  sel.removeAllRanges();
+  sel.addRange(newRange);
+}
+
 
 const CODE_LANGUAGES = [
   'auto', 'plaintext', 'javascript', 'typescript', 'python', 'bash',
@@ -169,8 +235,14 @@ export const EditorBlock = React.memo(function EditorBlock({
   onUndo,
   onRedo,
   onMoveBlock,
+  onMoveBlockToPosition,
   onDeleteBlock,
   registerRef,
+  slashMenuOpen = false,
+  activeSlashBlockId = null,
+  onSlashTrigger,
+  onSlashClose,
+  onSlashMenuKey,
 }: EditorBlockProps) {
   const elRef = useRef<HTMLElement | null>(null);
   const isComposingRef = useRef(false);
@@ -179,6 +251,50 @@ export const EditorBlock = React.memo(function EditorBlock({
   const [isHovered, setIsHovered] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
+
+  const [isDraggable, setIsDraggable] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
+  const [dropPosition, setDropPosition] = useState<'top' | 'bottom' | null>(null);
+
+  const handleDragStart = useCallback((e: React.DragEvent) => {
+    setIsDragging(true);
+    e.dataTransfer.setData('text/plain', block.id);
+    e.dataTransfer.effectAllowed = 'move';
+  }, [block.id]);
+
+  const handleDragEnd = useCallback(() => {
+    setIsDragging(false);
+    setIsDraggable(false);
+    setDropPosition(null);
+  }, []);
+
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    const rect = e.currentTarget.getBoundingClientRect();
+    const relativeY = e.clientY - rect.top;
+    if (relativeY < rect.height / 2) {
+      setDropPosition('top');
+    } else {
+      setDropPosition('bottom');
+    }
+  }, []);
+
+  const handleDragLeave = useCallback(() => {
+    setDropPosition(null);
+  }, []);
+
+  const handleDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    setDropPosition(null);
+    const draggedId = e.dataTransfer.getData('text/plain');
+    if (draggedId && draggedId !== block.id) {
+      const rect = e.currentTarget.getBoundingClientRect();
+      const relativeY = e.clientY - rect.top;
+      const position = relativeY < rect.height / 2 ? 'before' : 'after';
+      onMoveBlockToPosition?.(draggedId, block.id, position);
+    }
+  }, [block.id, onMoveBlockToPosition]);
 
   useEffect(() => {
     lastMarkdownRef.current = block.text;
@@ -278,17 +394,35 @@ export const EditorBlock = React.memo(function EditorBlock({
         onMoveBlock={onMoveBlock}
         onDeleteBlock={onDeleteBlock}
         registerRef={registerRef}
+        isDraggable={isDraggable}
+        setIsDraggable={setIsDraggable}
+        isDragging={isDragging}
+        setIsDragging={setIsDragging}
+        dropPosition={dropPosition}
+        setDropPosition={setDropPosition}
+        onDragStart={handleDragStart}
+        onDragEnd={handleDragEnd}
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
+        onDrop={handleDrop}
       />
     );
   }
 
   if (block.type === 'hr') {
+    const wrapperClassName = `editor-block-wrapper${isFocused ? ' is-focused' : ''}${isHovered ? ' is-hovered' : ''}${isDragging ? ' is-dragging' : ''}${dropPosition === 'top' ? ' drop-top' : ''}${dropPosition === 'bottom' ? ' drop-bottom' : ''}`;
     return (
       <div
-        className={`editor-block-wrapper${isFocused ? ' is-focused' : ''}${isHovered ? ' is-hovered' : ''}`}
+        className={wrapperClassName}
         onMouseEnter={() => setIsHovered(true)}
         onMouseLeave={() => setIsHovered(false)}
         onClick={() => onFocus(block.id)}
+        draggable={isDraggable}
+        onDragStart={handleDragStart}
+        onDragEnd={handleDragEnd}
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
+        onDrop={handleDrop}
       >
         <BlockGutter
           blockType={block.type} isHovered={isHovered} isFocused={isFocused}
@@ -297,6 +431,8 @@ export const EditorBlock = React.memo(function EditorBlock({
           onMoveUp={() => onMoveBlock(block.id, 'up')}
           onMoveDown={() => onMoveBlock(block.id, 'down')}
           onDelete={() => onDeleteBlock(block.id)}
+          onMouseEnterHandle={() => setIsDraggable(true)}
+          onMouseLeaveHandle={() => { if (!isDragging) setIsDraggable(false); }}
         />
         <hr className="editor-hr" />
       </div>
@@ -312,6 +448,11 @@ export const EditorBlock = React.memo(function EditorBlock({
   const handleKeyDown = useCallback(
     (e: KeyboardEvent<HTMLElement>) => {
       if (isComposingRef.current) return;
+      if (slashMenuOpen && ['ArrowUp', 'ArrowDown', 'Enter', 'Escape'].includes(e.key)) {
+        e.preventDefault();
+        onSlashMenuKey?.(e.key);
+        return;
+      }
       const el = elRef.current;
       if (!el) return;
       const mod = e.ctrlKey || e.metaKey;
@@ -429,13 +570,25 @@ export const EditorBlock = React.memo(function EditorBlock({
         });
       }
     },
-    [block.id, block.type, onEnter, onBackspaceEmpty, onArrow, onClearDocument, onUndo, onRedo, onTextChange]
+    [block.id, block.type, onEnter, onBackspaceEmpty, onArrow, onClearDocument, onUndo, onRedo, onTextChange, slashMenuOpen, onSlashMenuKey]
   );
 
   const handleInput = useCallback(() => {
     if (isComposingRef.current) return;
     const el = elRef.current;
     if (!el) return;
+
+    if (block.type === 'p') {
+      checkInputRules(el);
+    }
+
+    const text = el.textContent ?? '';
+    if (block.type === 'p' && text.startsWith('/')) {
+      onSlashTrigger?.(block.id, el, text.slice(1));
+    } else if (slashMenuOpen) {
+      onSlashClose?.();
+    }
+
     const markdown = block.type === 'code'
       ? (el.textContent ?? '')
       : htmlToMarkdown(el.innerHTML);
@@ -443,7 +596,7 @@ export const EditorBlock = React.memo(function EditorBlock({
       lastMarkdownRef.current = markdown;
       onTextChange(block.id, markdown);
     }
-  }, [block.id, block.type, onTextChange]);
+  }, [block.id, block.type, onTextChange, slashMenuOpen, onSlashTrigger, onSlashClose]);
 
   const highlightedCodeHtml = useMemo(() => {
     const code = block.text || '';
@@ -531,11 +684,18 @@ export const EditorBlock = React.memo(function EditorBlock({
 
   if (block.type === 'code') {
     const selectedLanguage = (block.language || 'auto').toLowerCase();
+    const wrapperClassName = `editor-block-wrapper${isFocused ? ' is-focused' : ''}${isHovered ? ' is-hovered' : ''}${isDragging ? ' is-dragging' : ''}${dropPosition === 'top' ? ' drop-top' : ''}${dropPosition === 'bottom' ? ' drop-bottom' : ''}`;
     return (
       <div
-        className={`editor-block-wrapper${isFocused ? ' is-focused' : ''}${isHovered ? ' is-hovered' : ''}`}
+        className={wrapperClassName}
         onMouseEnter={() => setIsHovered(true)}
         onMouseLeave={() => setIsHovered(false)}
+        draggable={isDraggable}
+        onDragStart={handleDragStart}
+        onDragEnd={handleDragEnd}
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
+        onDrop={handleDrop}
       >
         <BlockGutter
           blockType={block.type} isHovered={isHovered} isFocused={isFocused}
@@ -544,6 +704,8 @@ export const EditorBlock = React.memo(function EditorBlock({
           onMoveUp={() => onMoveBlock(block.id, 'up')}
           onMoveDown={() => onMoveBlock(block.id, 'down')}
           onDelete={() => onDeleteBlock(block.id)}
+          onMouseEnterHandle={() => setIsDraggable(true)}
+          onMouseLeaveHandle={() => { if (!isDragging) setIsDraggable(false); }}
         />
         <div className="editor-code-wrap">
           <div className="editor-code-header">
@@ -583,13 +745,24 @@ export const EditorBlock = React.memo(function EditorBlock({
     onMoveUp: () => onMoveBlock(block.id, 'up'),
     onMoveDown: () => onMoveBlock(block.id, 'down'),
     onDelete: () => onDeleteBlock(block.id),
+    onMouseEnterHandle: () => setIsDraggable(true),
+    onMouseLeaveHandle: () => { if (!isDragging) setIsDraggable(false); },
   };
+
+  const wrapperClassName = `editor-block-wrapper${isFocused ? ' is-focused' : ''}${isHovered ? ' is-hovered' : ''}${isDragging ? ' is-dragging' : ''}${dropPosition === 'top' ? ' drop-top' : ''}${dropPosition === 'bottom' ? ' drop-bottom' : ''}`;
 
   if (block.type === 'ul') {
     return (
-      <div className={`editor-block-wrapper${isFocused ? ' is-focused' : ''}${isHovered ? ' is-hovered' : ''}`}
+      <div className={wrapperClassName}
         onMouseEnter={() => setIsHovered(true)} onMouseLeave={() => setIsHovered(false)}
-        onMouseDown={handleWrapperPress} onTouchStart={handleWrapperPress}>
+        onMouseDown={handleWrapperPress} onTouchStart={handleWrapperPress}
+        draggable={isDraggable}
+        onDragStart={handleDragStart}
+        onDragEnd={handleDragEnd}
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
+        onDrop={handleDrop}
+      >
         <BlockGutter {...gutterProps} />
         <ul className="editor-list-wrap">{React.createElement('li', contentProps as never)}</ul>
       </div>
@@ -597,9 +770,16 @@ export const EditorBlock = React.memo(function EditorBlock({
   }
   if (block.type === 'ol') {
     return (
-      <div className={`editor-block-wrapper${isFocused ? ' is-focused' : ''}${isHovered ? ' is-hovered' : ''}`}
+      <div className={wrapperClassName}
         onMouseEnter={() => setIsHovered(true)} onMouseLeave={() => setIsHovered(false)}
-        onMouseDown={handleWrapperPress} onTouchStart={handleWrapperPress}>
+        onMouseDown={handleWrapperPress} onTouchStart={handleWrapperPress}
+        draggable={isDraggable}
+        onDragStart={handleDragStart}
+        onDragEnd={handleDragEnd}
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
+        onDrop={handleDrop}
+      >
         <BlockGutter {...gutterProps} />
         <div className="editor-list-wrap editor-ordered-list">
           <span className="editor-list-number" aria-hidden="true">
@@ -612,9 +792,16 @@ export const EditorBlock = React.memo(function EditorBlock({
   }
 
   return (
-    <div className={`editor-block-wrapper${isFocused ? ' is-focused' : ''}${isHovered ? ' is-hovered' : ''}`}
+    <div className={wrapperClassName}
       onMouseEnter={() => setIsHovered(true)} onMouseLeave={() => setIsHovered(false)}
-      onMouseDown={handleWrapperPress} onTouchStart={handleWrapperPress}>
+      onMouseDown={handleWrapperPress} onTouchStart={handleWrapperPress}
+      draggable={isDraggable}
+      onDragStart={handleDragStart}
+      onDragEnd={handleDragEnd}
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
+    >
       <BlockGutter {...gutterProps} />
       {React.createElement(tag, contentProps as never)}
     </div>
@@ -741,6 +928,18 @@ interface TableBlockProps {
   onMoveBlock: (id: string, dir: 'up' | 'down') => void;
   onDeleteBlock: (id: string) => void;
   registerRef: (id: string, el: HTMLElement | null) => void;
+
+  isDraggable: boolean;
+  setIsDraggable: (v: boolean) => void;
+  isDragging: boolean;
+  setIsDragging: (v: boolean) => void;
+  dropPosition: 'top' | 'bottom' | null;
+  setDropPosition: (v: 'top' | 'bottom' | null) => void;
+  onDragStart: (e: React.DragEvent) => void;
+  onDragEnd: () => void;
+  onDragOver: (e: React.DragEvent) => void;
+  onDragLeave: () => void;
+  onDrop: (e: React.DragEvent) => void;
 }
 
 function parseTableToMatrix(raw: string): { headers: string[]; rows: string[][] } {
@@ -767,6 +966,8 @@ function TableBlock({
   block, isFocused, isHovered, setIsHovered,
   blockIndex, totalBlocks, showMenu, setShowMenu, menuRef,
   onFocus, onTextChange, onMoveBlock, onDeleteBlock, registerRef,
+  isDraggable, setIsDraggable, isDragging, setIsDragging, dropPosition, setDropPosition,
+  onDragStart, onDragEnd, onDragOver, onDragLeave, onDrop,
 }: TableBlockProps) {
   const parsed = useMemo(() => parseTableToMatrix(block.text), [block.text]);
   const [headers, setHeaders] = useState(parsed.headers);
@@ -782,12 +983,20 @@ function TableBlock({
     onTextChange(block.id, matrixToMarkdown(h, r));
   }, [block.id, onTextChange]);
 
+  const wrapperClassName = `editor-block-wrapper${isFocused ? ' is-focused' : ''}${isHovered ? ' is-hovered' : ''}${isDragging ? ' is-dragging' : ''}${dropPosition === 'top' ? ' drop-top' : ''}${dropPosition === 'bottom' ? ' drop-bottom' : ''}`;
+
   return (
     <div
-      className={`editor-block-wrapper${isFocused ? ' is-focused' : ''}${isHovered ? ' is-hovered' : ''}`}
+      className={wrapperClassName}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
       onClick={() => onFocus(block.id)}
+      draggable={isDraggable}
+      onDragStart={onDragStart}
+      onDragEnd={onDragEnd}
+      onDragOver={onDragOver}
+      onDragLeave={onDragLeave}
+      onDrop={onDrop}
     >
       <BlockGutter
         blockType="table" isHovered={isHovered} isFocused={isFocused}
@@ -796,6 +1005,8 @@ function TableBlock({
         onMoveUp={() => onMoveBlock(block.id, 'up')}
         onMoveDown={() => onMoveBlock(block.id, 'down')}
         onDelete={() => onDeleteBlock(block.id)}
+        onMouseEnterHandle={() => setIsDraggable(true)}
+        onMouseLeaveHandle={() => { if (!isDragging) setIsDraggable(false); }}
       />
       <div
         ref={(el) => registerRef(block.id, el)}
@@ -931,11 +1142,14 @@ interface BlockGutterProps {
   showMenu: boolean; setShowMenu: (v: boolean) => void;
   menuRef: React.RefObject<HTMLDivElement | null>;
   onMoveUp: () => void; onMoveDown: () => void; onDelete: () => void;
+  onMouseEnterHandle?: () => void;
+  onMouseLeaveHandle?: () => void;
 }
 
 function BlockGutter({
   blockType, isHovered, isFocused, blockIndex, totalBlocks, listOrdinal,
   showMenu, setShowMenu, menuRef, onMoveUp, onMoveDown, onDelete,
+  onMouseEnterHandle, onMouseLeaveHandle,
 }: BlockGutterProps) {
   const visible = isHovered || isFocused;
   const label = blockType === 'ol'
@@ -948,6 +1162,8 @@ function BlockGutter({
         <button
           className="block-handle" title="Block options"
           onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); setShowMenu(!showMenu); }}
+          onMouseEnter={onMouseEnterHandle}
+          onMouseLeave={onMouseLeaveHandle}
         >
           <svg width="12" height="12" viewBox="0 0 12 12" fill="currentColor">
             <circle cx="4" cy="2.5" r="1.1" /><circle cx="8" cy="2.5" r="1.1" />

@@ -1,9 +1,10 @@
 'use client';
 
-import React, { useEffect, useCallback, useRef, useMemo } from 'react';
+import React, { useEffect, useCallback, useRef, useMemo, useState } from 'react';
 import { useMarkdownEditor } from './useMarkdownEditor';
 import { EditorBlock } from './EditorBlock';
 import { FloatingToolbar } from './FloatingToolbar';
+import { SlashMenu } from './SlashMenu';
 import { BlockType } from '@/types';
 
 interface EditorProps {
@@ -36,6 +37,7 @@ export function Editor({ docId, content, contentWidth, fontCss, sidebarOffset, o
     applyInlineFormat,
     insertBlock,
     moveBlock,
+    moveBlockToPosition,
     deleteBlock,
     updateCodeLanguage,
     clearDocument,
@@ -50,6 +52,95 @@ export function Editor({ docId, content, contentWidth, fontCss, sidebarOffset, o
       loadContent(docId, content);
     }
   }, [docId, content, loadContent]);
+
+  const [slashMenu, setSlashMenu] = useState<{
+    isOpen: boolean;
+    blockId: string;
+    x: number;
+    y: number;
+    query: string;
+  }>({ isOpen: false, blockId: '', x: 0, y: 0, query: '' });
+
+  const [selectedIndex, setSelectedIndex] = useState(0);
+  const [filteredLength, setFilteredLength] = useState(0);
+
+  const handleSlashTrigger = useCallback((blockId: string, el: HTMLElement, query: string) => {
+    const rect = el.getBoundingClientRect();
+    const containerEl = el.closest('.editor-doc-container');
+    if (!containerEl) return;
+    const containerRect = containerEl.getBoundingClientRect();
+
+    const x = rect.left - containerRect.left;
+    const y = rect.bottom - containerRect.top + 4;
+
+    setSlashMenu({
+      isOpen: true,
+      blockId,
+      x,
+      y,
+      query,
+    });
+    setSelectedIndex(0);
+  }, []);
+
+  const handleSlashClose = useCallback(() => {
+    setSlashMenu({ isOpen: false, blockId: '', x: 0, y: 0, query: '' });
+  }, []);
+
+  const handleSlashSelect = useCallback((type: string) => {
+    const blockId = slashMenu.blockId;
+    setSlashMenu({ isOpen: false, blockId: '', x: 0, y: 0, query: '' });
+
+    if (type === 'table') {
+      const tableTemplate = `| Column 1 | Column 2 | Column 3 |\n| -------- | -------- | -------- |\n| Cell     | Cell     | Cell     |`;
+      handleTextChange(blockId, tableTemplate);
+      applyBlockFormat('table');
+    } else if (type === 'hr') {
+      handleTextChange(blockId, '---');
+      applyBlockFormat('hr');
+    } else {
+      handleTextChange(blockId, '');
+      applyBlockFormat(type as BlockType);
+    }
+
+    requestAnimationFrame(() => {
+      const el = document.querySelector(`[data-block-id="${blockId}"]`) as HTMLElement;
+      el?.focus();
+    });
+  }, [slashMenu.blockId, handleTextChange, applyBlockFormat]);
+
+  const handleSlashMenuKey = useCallback((key: string) => {
+    if (!slashMenu.isOpen || filteredLength === 0) return;
+    if (key === 'ArrowDown') {
+      setSelectedIndex((prev) => (prev + 1) % filteredLength);
+    } else if (key === 'ArrowUp') {
+      setSelectedIndex((prev) => (prev - 1 + filteredLength) % filteredLength);
+    } else if (key === 'Enter') {
+      const q = slashMenu.query.toLowerCase().trim();
+      const items = [
+        { type: 'p', label: 'Paragraph' },
+        { type: 'h1', label: 'Heading 1' },
+        { type: 'h2', label: 'Heading 2' },
+        { type: 'h3', label: 'Heading 3' },
+        { type: 'ul', label: 'Bullet list' },
+        { type: 'ol', label: 'Numbered list' },
+        { type: 'quote', label: 'Quote block' },
+        { type: 'code', label: 'Code block' },
+        { type: 'table', label: 'Table' },
+        { type: 'hr', label: 'Divider' },
+      ];
+      const filtered = q
+        ? items.filter((item) => item.label.toLowerCase().includes(q))
+        : items;
+      
+      const selected = filtered[selectedIndex];
+      if (selected) {
+        handleSlashSelect(selected.type);
+      }
+    } else if (key === 'Escape') {
+      handleSlashClose();
+    }
+  }, [slashMenu.isOpen, slashMenu.query, selectedIndex, filteredLength, handleSlashSelect, handleSlashClose]);
 
   const handleEditorClick = useCallback(
     (e: React.MouseEvent<HTMLDivElement>) => {
@@ -223,13 +314,31 @@ export function Editor({ docId, content, contentWidth, fontCss, sidebarOffset, o
               onUndo={undo}
               onRedo={redo}
               onMoveBlock={moveBlock}
+              onMoveBlockToPosition={moveBlockToPosition}
               onDeleteBlock={deleteBlock}
               registerRef={registerRef}
+              slashMenuOpen={slashMenu.isOpen && slashMenu.blockId === block.id}
+              activeSlashBlockId={slashMenu.blockId}
+              onSlashTrigger={handleSlashTrigger}
+              onSlashClose={handleSlashClose}
+              onSlashMenuKey={handleSlashMenuKey}
             />
           ))}
           {/* Bottom spacer */}
           <div className="editor-bottom-spacer" onClick={handleEditorClick} />
         </div>
+
+        {slashMenu.isOpen && (
+          <SlashMenu
+            x={slashMenu.x}
+            y={slashMenu.y}
+            query={slashMenu.query}
+            selectedIndex={selectedIndex}
+            onSelect={handleSlashSelect}
+            onClose={handleSlashClose}
+            setFilteredLength={setFilteredLength}
+          />
+        )}
       </div>
 
       <FloatingToolbar
