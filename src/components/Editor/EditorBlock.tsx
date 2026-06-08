@@ -335,7 +335,7 @@ export const EditorBlock = React.memo(function EditorBlock({
     if (!media.matches) return;
 
     const target = e.target as HTMLElement;
-    if (target.closest('button, input, select, textarea, a, .table-cell-input, [contenteditable="true"]')) {
+    if (target.closest('button, input, select, textarea, a, .table-cell-input')) {
       return;
     }
 
@@ -372,7 +372,7 @@ export const EditorBlock = React.memo(function EditorBlock({
       touchTimerRef.current = null;
       
       const target = e.target as HTMLElement;
-      if (!target.closest('button, input, select, textarea, a, .table-cell-input, [contenteditable="true"]')) {
+      if (!target.closest('button, input, select, textarea, a, .table-cell-input')) {
         focusEditableBlock();
       }
     }
