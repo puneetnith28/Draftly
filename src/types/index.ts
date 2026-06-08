@@ -25,6 +25,7 @@ export interface DocumentFolder {
   id: string;
   name: string;
   color: string;
+  parentId: string | null;
   sortOrder: number;
   createdAt: number;
   updatedAt: number;

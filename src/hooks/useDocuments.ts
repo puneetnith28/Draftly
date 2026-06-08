@@ -16,6 +16,7 @@ export interface DocumentFolder {
   id: string;
   name: string;
   color: string;
+  parentId: string | null;
   sortOrder: number;
   createdAt: number;
   updatedAt: number;
@@ -103,15 +104,16 @@ function normalizeDocument(rawDoc: unknown, fallbackOrder: number): Document | n
 function normalizeFolder(rawFolder: unknown, fallbackOrder: number): DocumentFolder | null {
   if (!rawFolder || typeof rawFolder !== 'object') return null;
 
-  const candidate = rawFolder as Partial<DocumentFolder>;
+  const candidate = rawFolder as Partial<DocumentFolder & { parentId?: unknown }>;
   if (typeof candidate.id !== 'string') return null;
 
   const now = Date.now();
   return {
     id: candidate.id,
     name: normalizeFolderName(typeof candidate.name === 'string' ? candidate.name : 'Untitled Folder'),
-    color: normalizeFolderColor((candidate as { color?: unknown }).color),
-    sortOrder: normalizeSortOrder((candidate as { sortOrder?: unknown }).sortOrder, fallbackOrder),
+    color: normalizeFolderColor(candidate.color),
+    parentId: typeof candidate.parentId === 'string' ? candidate.parentId : null,
+    sortOrder: normalizeSortOrder(candidate.sortOrder, fallbackOrder),
     createdAt: isValidTimestamp(candidate.createdAt) ? candidate.createdAt : now,
     updatedAt: isValidTimestamp(candidate.updatedAt) ? candidate.updatedAt : now,
   };
@@ -298,19 +300,24 @@ export function useDocuments() {
     });
   }, [folders]);
 
-  const createFolder = useCallback((name: string, color: string = DEFAULT_FOLDER_COLOR) => {
+  const createFolder = useCallback((name: string, color: string = DEFAULT_FOLDER_COLOR, parentId: string | null = null) => {
     const now = Date.now();
     const nextFolder: DocumentFolder = {
       id: generateFolderId(),
       name: normalizeFolderName(name),
       color: normalizeFolderColor(color),
+      parentId: parentId,
       sortOrder: 0,
       createdAt: now,
       updatedAt: now,
     };
 
     setFolders((prev) => {
-      const next = prev.map((folder) => ({ ...folder, sortOrder: folder.sortOrder + 1 }));
+      const next = prev.map((folder) =>
+        folder.parentId === parentId
+          ? { ...folder, sortOrder: folder.sortOrder + 1 }
+          : folder
+      );
       next.unshift(nextFolder);
       saveStore({ documents, folders: next });
       return next;
@@ -349,17 +356,45 @@ export function useDocuments() {
     });
   }, [documents]);
 
-  const reorderFolders = useCallback((folderId: string, beforeFolderId: string | null) => {
+  const reorderFolders = useCallback((folderId: string, targetParentId: string | null, beforeFolderId: string | null) => {
     setFolders((prev) => {
-      const ordered = [...prev].sort(compareSortOrder);
-      const sourceIndex = ordered.findIndex((folder) => folder.id === folderId);
-      if (sourceIndex < 0) return prev;
+      if (targetParentId === folderId) return prev;
+      
+      let tempParentId = targetParentId;
+      while (tempParentId !== null) {
+        const parentFolder = prev.find((f) => f.id === tempParentId);
+        if (!parentFolder) break;
+        if (parentFolder.id === folderId) {
+          return prev;
+        }
+        tempParentId = parentFolder.parentId;
+      }
 
-      const [moving] = ordered.splice(sourceIndex, 1);
-      const targetIndex = beforeFolderId ? ordered.findIndex((folder) => folder.id === beforeFolderId) : ordered.length;
-      ordered.splice(targetIndex < 0 ? ordered.length : targetIndex, 0, moving);
+      const updated = prev.map((f) =>
+        f.id === folderId ? { ...f, parentId: targetParentId, updatedAt: Date.now() } : f
+      );
 
-      const next = ordered.map((folder, index) => ({ ...folder, sortOrder: index }));
+      const siblings = updated
+        .filter((f) => f.parentId === targetParentId)
+        .sort(compareSortOrder);
+      
+      const sourceIndex = siblings.findIndex((f) => f.id === folderId);
+      if (sourceIndex >= 0) {
+        const [moving] = siblings.splice(sourceIndex, 1);
+        const targetIndex = beforeFolderId
+          ? siblings.findIndex((f) => f.id === beforeFolderId)
+          : siblings.length;
+        siblings.splice(targetIndex < 0 ? siblings.length : targetIndex, 0, moving);
+      }
+
+      const siblingOrder = new Map(siblings.map((f, index) => [f.id, index]));
+      const next = updated.map((f) => {
+        if (f.parentId === targetParentId) {
+          return { ...f, sortOrder: siblingOrder.get(f.id) ?? f.sortOrder };
+        }
+        return f;
+      });
+
       saveStore({ documents, folders: next });
       return next;
     });
@@ -432,23 +467,23 @@ export function useDocuments() {
 
   const deleteFolder = useCallback((id: string) => {
     setFolders((prevFolders) => {
-      const nextFolders = prevFolders.filter((folder) => folder.id !== id);
+      const targetFolder = prevFolders.find((f) => f.id === id);
+      const parentId = targetFolder ? targetFolder.parentId : null;
+      
+      const nextFolders = prevFolders
+        .filter((folder) => folder.id !== id)
+        .map((folder) =>
+          folder.parentId === id ? { ...folder, parentId, updatedAt: Date.now() } : folder
+        );
+
       setDocuments((prevDocuments) => {
-        const remainingUnfiled = prevDocuments.filter((doc) => doc.folderId === null);
-        const movedDocs = prevDocuments.filter((doc) => doc.folderId === id)
-          .sort(compareSortOrder)
-          .map((doc, index) => ({
-            ...doc,
-            folderId: null,
-            sortOrder: remainingUnfiled.reduce((max, item) => Math.max(max, item.sortOrder), -1) + index + 1,
-            updatedAt: Date.now(),
-          }));
         const nextDocuments = prevDocuments.map((doc) =>
-          doc.folderId === id ? movedDocs.shift() ?? { ...doc, folderId: null, updatedAt: Date.now() } : doc
+          doc.folderId === id ? { ...doc, folderId: parentId, updatedAt: Date.now() } : doc
         );
         saveStore({ documents: nextDocuments, folders: nextFolders });
         return nextDocuments;
       });
+
       return nextFolders;
     });
   }, []);
