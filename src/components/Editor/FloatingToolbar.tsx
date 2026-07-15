@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useRef, useEffect } from 'react';
-import { ParsedBlock } from '@/types';
+import { ParsedBlock } from '@shared/types';
 
 interface FloatingToolbarProps {
   focusedBlockId: string | null;
