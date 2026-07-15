@@ -5,7 +5,7 @@ import { useMarkdownEditor } from './useMarkdownEditor';
 import { EditorBlock } from './EditorBlock';
 import { FloatingToolbar } from './FloatingToolbar';
 import { SlashMenu } from './SlashMenu';
-import { BlockType } from '@/types';
+import { BlockType } from '@shared/types';
 
 interface EditorProps {
   docId: string;

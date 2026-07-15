@@ -1,4 +1,5 @@
-import { BlockType, ParsedBlock } from '@/types';
+import { BlockType, ParsedBlock } from '@shared/types';
+import { generateId } from '@shared/utils/idGenerator';
 
 export interface BlockDetection {
   type: BlockType;
@@ -102,15 +103,12 @@ export function parseInlineMarkdown(text: string): string {
   return html;
 }
 
-let blockCounter = 0;
-function nextBlockId(): string {
-  return `b_${Date.now()}_${blockCounter++}`;
-}
+
 
 export function parseMarkdownToBlocks(markdown: string): ParsedBlock[] {
   const md = typeof markdown === 'string' ? markdown : '';
   if (!md.trim()) {
-    return [{ id: nextBlockId(), type: 'h1', text: '', raw: '' }];
+    return [{ id: generateId('b'), type: 'h1', text: '', raw: '' }];
   }
 
   const lines = md.split('\n');
@@ -129,7 +127,7 @@ export function parseMarkdownToBlocks(markdown: string): ParsedBlock[] {
       }
       i++;
       blocks.push({
-        id: nextBlockId(),
+        id: generateId('b'),
         type: 'code',
         text: codeLines.join('\n'),
         raw: `\`\`\`${lang}\n${codeLines.join('\n')}\n\`\`\``,
@@ -146,7 +144,7 @@ export function parseMarkdownToBlocks(markdown: string): ParsedBlock[] {
         i++;
       }
       blocks.push({
-        id: nextBlockId(),
+        id: generateId('b'),
         type: 'table',
         text: tableLines.join('\n'),
         raw: tableLines.join('\n'),
@@ -162,7 +160,7 @@ export function parseMarkdownToBlocks(markdown: string): ParsedBlock[] {
     const detected = detectBlockType(line);
     if (detected) {
       blocks.push({
-        id: nextBlockId(),
+        id: generateId('b'),
         type: detected.type,
         text: detected.text,
         raw: detected.raw,
@@ -170,7 +168,7 @@ export function parseMarkdownToBlocks(markdown: string): ParsedBlock[] {
       });
     } else {
       blocks.push({
-        id: nextBlockId(),
+        id: generateId('b'),
         type: 'p',
         text: line,
         raw: line,
@@ -180,7 +178,7 @@ export function parseMarkdownToBlocks(markdown: string): ParsedBlock[] {
   }
 
   if (blocks.length === 0) {
-    blocks.push({ id: nextBlockId(), type: 'h1', text: '', raw: '' });
+    blocks.push({ id: generateId('b'), type: 'h1', text: '', raw: '' });
   }
 
   return blocks;

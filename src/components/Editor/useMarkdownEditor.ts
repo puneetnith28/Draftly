@@ -2,16 +2,14 @@
 
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { detectBlockType, parseMarkdownToBlocks, blocksToMarkdown } from '@/lib/markdownTransform';
-import { BlockType, ParsedBlock } from '@/types';
+import { BlockType, ParsedBlock } from '@shared/types';
+import { generateId } from '@shared/utils/idGenerator';
 
 
-let idCounter = 0;
-function newId() {
-  return `b_${Date.now()}_${idCounter++}`;
-}
+
 
 function createBlock(type: BlockType = 'p', text = ''): ParsedBlock {
-  return { id: newId(), type, text, raw: '', language: undefined };
+  return { id: generateId('b'), type, text, raw: '', language: undefined };
 }
 
 function htmlToMarkdown(html: string): string {

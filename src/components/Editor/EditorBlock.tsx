@@ -11,7 +11,7 @@ import React, {
 } from 'react';
 import hljs from 'highlight.js/lib/common';
 import { parseInlineMarkdown, parseTableMarkdown, detectBlockType } from '@/lib/markdownTransform';
-import { ParsedBlock, BlockType } from '@/types';
+import { ParsedBlock, BlockType } from '@shared/types';
 
 interface EditorBlockProps {
   block: ParsedBlock;

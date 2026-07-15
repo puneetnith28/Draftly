@@ -2,25 +2,8 @@
 
 import { useState, useEffect, useCallback } from 'react';
 
-export interface Document {
-  id: string;
-  title: string;
-  content: string;
-  folderId: string | null;
-  sortOrder: number;
-  createdAt: number;
-  updatedAt: number;
-}
-
-export interface DocumentFolder {
-  id: string;
-  name: string;
-  color: string;
-  parentId: string | null;
-  sortOrder: number;
-  createdAt: number;
-  updatedAt: number;
-}
+import { Document, DocumentFolder } from '@shared/types';
+import { generateId } from '@shared/utils/idGenerator';
 
 interface DocumentsStore {
   documents: Document[];
@@ -43,18 +26,12 @@ export const FOLDER_COLOR_OPTIONS = [
 
 const DEFAULT_FOLDER_COLOR = FOLDER_COLOR_OPTIONS[0];
 
-function generateId(): string {
-  return `doc_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
-}
 
-function generateFolderId(): string {
-  return `folder_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
-}
 
 function createBlankDocument(id?: string, sortOrder = 0): Document {
   const now = Date.now();
   return {
-    id: id ?? generateId(),
+    id: id ?? generateId('doc'),
     title: 'Untitled',
     content: '',
     folderId: null,
@@ -303,7 +280,7 @@ export function useDocuments() {
   const createFolder = useCallback((name: string, color: string = DEFAULT_FOLDER_COLOR, parentId: string | null = null) => {
     const now = Date.now();
     const nextFolder: DocumentFolder = {
-      id: generateFolderId(),
+      id: generateId('folder'),
       name: normalizeFolderName(name),
       color: normalizeFolderColor(color),
       parentId: parentId,
