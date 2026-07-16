@@ -2,9 +2,33 @@
 
 Draftly is a **privacy-first, offline-capable** block editor and document organizer designed for seamless writer workflows. All your documents are stored directly in your browser — **no account, no server, no internet connection required for writing**. Your work remains on your device.
 
-Positioned as a lightweight competitor to tools like Notion and Obsidian, Draftly combines a robust block-based editor with an advanced file explorer and rich multi-format export capability. As a **Progressive Web App (PWA)**, Draftly can be **installed on your device** to work just like a native app, available directly from your home screen or dock.
+Behind its clean UI lies a rigorous implementation of **Clean Architecture**, **SOLID Principles**, and proven **Design Patterns** entirely decoupled from the React UI layer.
 
 > **📥 Installable & Offline-Capable.** Look for the download icon in your browser's address bar to install Draftly. After the first visit, it works with or without an internet connection. All data is stored locally in your browser.
+
+---
+
+## 🏛️ Architecture & Engineering Depth
+
+Instead of tightly coupling business logic to React components and hooks, Draftly employs a **Layered Clean Architecture** where dependencies point strictly inward toward the Domain.
+
+### 🧩 1. The Four Layers
+- **Presentation Layer (React):** Pure UI components and hooks (`useDraftlyEngine`). Zero business logic or storage calls exist here.
+- **Application Layer (Services & Facade):** Orchestrates use cases (`DocumentService`, `EditorService`). Exposes a single `DraftlyEngine` Facade to the UI, hiding all system complexity.
+- **Domain Layer (Entities & Business Rules):** The core of the application. Pure TypeScript classes (`Block`, `Document`, `Folder`) with absolutely no dependencies on React, Next.js, or LocalStorage.
+- **Infrastructure Layer (Data & Integrations):** Handles external concerns. Implements the Domain's `DocumentRepository` interface using a `LocalStorageAdapter`. Can be trivially swapped to Firebase or Supabase without altering the core app.
+
+### 🏗️ 2. Applied Design Patterns
+- **Facade Pattern:** `DraftlyEngine` provides a unified, simplified interface for the React UI.
+- **Strategy Pattern:** The Export pipeline uses `ExportStrategy` (implemented by `MarkdownExportStrategy`, `PdfExportStrategy`, etc.), allowing new formats to be added following the Open/Closed Principle.
+- **Command Pattern:** Editor interactions (inserting, deleting, moving blocks) are encapsulated into `ICommand` objects (`InsertBlockCommand`), enabling robust Undo/Redo history stacks.
+- **Factory Pattern:** `BlockFactory` dynamically instantiates the correct Block entity (`HeadingBlock`, `CodeBlock`, etc.) to eliminate massive switch statements.
+- **Observer Pattern:** A `GlobalEventBus` handles reactivity. When the `EditorService` modifies a block, it publishes an event that the UI and `AutoSaveObserver` react to asynchronously.
+- **Repository & Adapter Pattern:** The data layer is abstracted behind strict interfaces, ensuring the Domain never knows *how* data is saved.
+
+### 📊 3. UML Documentation
+We have generated comprehensive Mermaid UML diagrams documenting the system's structural and behavioral design:
+👉 **[View the Architectural UML Diagrams in ARCHITECTURE.md](./ARCHITECTURE.md)**
 
 ---
 
@@ -12,46 +36,23 @@ Positioned as a lightweight competitor to tools like Notion and Obsidian, Draftl
 
 ### 1. Nested File Explorer
 * **Hierarchical Folders**: Create unlimited nested subdirectories (`Folder` inside `Folder`).
-* **Visual Directory Tree**: Rendered recursively with vertical connection lines, indent levels, and smooth transitions for expanding and collapsing items.
-* **Drag-and-Drop Reorganization**: Fully cycle-safe drag-and-drop engine allowing you to move files and subfolders in/out of nested paths without creating dependency loops.
-* **Safety deletions**: Deleting a parent folder automatically promotes (bubbles up) its child subfolders and documents to its parent level, preventing orphaned files.
+* **Visual Directory Tree**: Rendered recursively with vertical connection lines, indent levels, and smooth transitions.
+* **Cycle-Safe Drag-and-Drop**: Safely move files and subfolders in/out of nested paths without creating dependency loops.
 
 ### 2. Touch Gesture Engine (Mobile UX)
 * **Press & Hold to Delete**: A custom touch-gesture tracker designed to let mobile users press and hold any editor block to trigger visual delete overlays.
-* **Haptic Feedback**: Integrates with mobile device vibration motors (`navigator.vibrate`) to offer satisfying physical confirmations of gesture actions.
+* **Haptic Feedback**: Integrates with mobile device vibration motors (`navigator.vibrate`) for satisfying physical confirmations.
 
 ### 3. Inline Slash Commands (`/`)
 * **Contextual Menu**: Triggered by pressing `/` in any empty text block.
-* **Block Conversion**: Easily switch block types to Headings, Bullet Lists, Code Blocks, or Quote Blocks instantly from the popup menu.
+* **Block Conversion**: Easily switch block types to Headings, Bullet Lists, Code Blocks, or Quote Blocks instantly.
 
 ### 4. Offline-First & Zero Backend
-* **No Account Required**: Open the app and start writing. Zero sign-up, zero login flow.
-* **LocalStorage Persistence**: All documents, folders, and preferences are stored directly in the browser's `localStorage`. Data persists across browser sessions and survives page refreshes.
-* **No Network Dependency**: Draftly has no API calls, no remote database, and no cloud sync. It works perfectly with zero internet connection after the initial page load.
-* **PWA-Ready**: The app registers a Service Worker in production mode, enabling full offline access after the first visit — even if you close and reopen the browser.
+* **LocalStorage Persistence**: All data is strictly persisted to the browser's `localStorage` via the Infrastructure Adapter.
+* **PWA-Ready**: Registers a Service Worker in production mode, enabling full offline access after the first visit.
 
-### 5. Robust Auto-Saving & Performance
-* **Instant Auto-Save**: Every keystroke is debounced and automatically persisted to `localStorage`. The top bar shows a real-time `Saving...` → `Saved` indicator.
-* **Stable Save Loop Prevention**: Uses a "latest-ref" pattern to prevent the auto-save effect from triggering unnecessary re-renders caused by prop recreation.
-* **Responsive Layouts**: Designed using premium glassmorphism overlays and CSS variable styling, offering a seamless experience across desktop and mobile browsers.
-
-### 6. Multi-Format Export
-* Export documents to clean **Markdown**, **PDF**, or **DOCX** with one click — all generated client-side with no server involvement.
-
----
-
-## 🛠️ Tech Stack
-
-| Layer | Technology |
-|---|---|
-| **Core Framework** | [Next.js 16](https://nextjs.org) (App Router, React 19) |
-| **Language** | TypeScript — type-safe schemas, interfaces, and component props |
-| **Styling** | TailwindCSS + Custom CSS variables (dark mode, glassmorphism, micro-animations) |
-| **Data Storage** | Browser `localStorage` — fully client-side, zero backend |
-| **Offline Support** | Service Worker (PWA) registered in production builds |
-| **Document Export** | `docx`, `jspdf`, `pdfkit` — all client-side file generation |
-| **Icons** | `react-icons`, `lucide-react`, inline SVGs |
-| **Markdown** | `markdown-it` — for parsing and rendering Markdown blocks |
+### 5. Multi-Format Export
+* Export documents to clean **Markdown**, **PDF**, or **DOCX** with one click — all generated client-side through the Strategy pipeline.
 
 
 ---
@@ -72,12 +73,17 @@ cd draftly
 npm install
 ```
 
-### 3. Run the Development Server
+### 3. Run the Unit Tests
+Verify the Domain, Application, and Infrastructure layers using the Jest suite:
+```bash
+npm run test
+```
+
+### 4. Run the Development Server
 ```bash
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) in your browser to start optimize the Draftly in your own way.
+Open [http://localhost:3000](http://localhost:3000) in your browser.
 
 [View Live Demo](https://draftlyy.vercel.app/)
-
