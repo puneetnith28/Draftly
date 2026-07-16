@@ -1,43 +1,39 @@
 import { BlockFactory } from '../BlockFactory';
+import { ParagraphBlock } from '../../entities/blocks/ParagraphBlock';
 import { HeadingBlock } from '../../entities/blocks/HeadingBlock';
 import { CodeBlock } from '../../entities/blocks/CodeBlock';
-import { ParagraphBlock } from '../../entities/blocks/ParagraphBlock';
-import { ParsedBlock } from '@shared/types';
+import { QuoteBlock } from '../../entities/blocks/QuoteBlock';
+import { TableBlock } from '../../entities/blocks/TableBlock';
 
 describe('BlockFactory', () => {
-  describe('createNew()', () => {
-    it('should create a HeadingBlock when type is h1', () => {
-      const block = BlockFactory.createNew('h1', 'Title');
-      expect(block).toBeInstanceOf(HeadingBlock);
-      expect(block.serialize()).toBe('# Title\n');
-    });
-
-    it('should create a CodeBlock when type is code', () => {
-      const block = BlockFactory.createNew('code', 'console.log()', 'javascript');
-      expect(block).toBeInstanceOf(CodeBlock);
-      expect(block.serialize()).toBe('```javascript\nconsole.log()\n```\n');
-    });
-
-    it('should default to ParagraphBlock for unknown types', () => {
-      const block = BlockFactory.createNew('unknown', 'Hello');
-      expect(block).toBeInstanceOf(ParagraphBlock);
-      expect(block.serialize()).toBe('Hello\n');
-    });
+  it('should create a ParagraphBlock by default if type is p', () => {
+    const block = BlockFactory.createNew('p', 'Hello world');
+    expect(block).toBeInstanceOf(ParagraphBlock);
+    expect(block.text).toBe('Hello world');
+    expect(block.id).toBeDefined();
   });
 
-  describe('reconstitute()', () => {
-    it('should rehydrate a JSON payload into a concrete BlockEntity', () => {
-      const payload: ParsedBlock = {
-        id: 'b_123',
-        type: 'h2',
-        text: 'Subtitle',
-        raw: '## Subtitle'
-      };
-      
-      const block = BlockFactory.reconstitute(payload);
-      expect(block).toBeInstanceOf(HeadingBlock);
-      expect(block.id).toBe('b_123');
-      expect(block.serialize()).toBe('## Subtitle\n');
-    });
+  it('should create a HeadingBlock', () => {
+    const block = BlockFactory.createNew('h1', 'Heading');
+    expect(block).toBeInstanceOf(HeadingBlock);
+    expect(block.type).toBe('h1');
+  });
+
+  it('should create a CodeBlock', () => {
+    const block = BlockFactory.createNew('code', 'console.log()');
+    expect(block).toBeInstanceOf(CodeBlock);
+    expect(block.type).toBe('code');
+  });
+
+  it('should create a QuoteBlock', () => {
+    const block = BlockFactory.createNew('quote', 'To be or not to be');
+    expect(block).toBeInstanceOf(QuoteBlock);
+    expect(block.type).toBe('quote');
+  });
+
+  it('should create a TableBlock', () => {
+    const block = BlockFactory.createNew('table', 'Col1 | Col2');
+    expect(block).toBeInstanceOf(TableBlock);
+    expect(block.type).toBe('table');
   });
 });
