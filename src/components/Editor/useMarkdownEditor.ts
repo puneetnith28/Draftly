@@ -486,7 +486,7 @@ export function useMarkdownEditor(
 
       compressImage(file).then((dataUrl) => {
         const imageBlock: ParsedBlock = {
-          id: newId(),
+          id: generateId('b'),
           type: 'p',
           text: `![Pasted image](${dataUrl})`,
           raw: `![Pasted image](${dataUrl})`,
@@ -515,7 +515,7 @@ export function useMarkdownEditor(
       Promise.resolve().then(() => {
         const pastedBlocks = parseMarkdownToBlocks(markdownText).map((b) => ({
           ...b,
-          id: newId(),
+          id: generateId('b'),
         }));
         if (pastedBlocks.length === 0) return;
         applyBlocksChange((prev) => {

@@ -10,7 +10,8 @@ export class MigrationRunner {
   public static migrateV1toV2(): void {
     if (typeof window === 'undefined') return;
 
-    const isMigrated = LocalStorageAdapter.getItem<boolean>(V2_MIGRATION_KEY);
+    const storage = new LocalStorageAdapter();
+    const isMigrated = storage.getItem<boolean>(V2_MIGRATION_KEY);
     if (isMigrated) {
       return;
     }
@@ -19,7 +20,7 @@ export class MigrationRunner {
       console.log('Starting Draftly v1 to v2 data migration...');
       const now = Date.now();
 
-      const folders = LocalStorageAdapter.getItem<any[]>(FOLDERS_KEY) || [];
+      const folders = storage.getItem<any[]>(FOLDERS_KEY) || [];
       const migratedFolders: DocumentFolder[] = folders.map(folder => ({
         id: folder.id,
         name: folder.name || 'Untitled Folder',
@@ -30,7 +31,7 @@ export class MigrationRunner {
         updatedAt: folder.updatedAt || now
       }));
 
-      const docs = LocalStorageAdapter.getItem<any[]>(DOCS_KEY) || [];
+      const docs = storage.getItem<any[]>(DOCS_KEY) || [];
       const migratedDocs: IDocument[] = docs.map(doc => ({
         id: doc.id,
         title: doc.title || 'Untitled',
@@ -41,10 +42,10 @@ export class MigrationRunner {
         updatedAt: doc.updatedAt || now
       }));
 
-      LocalStorageAdapter.setItem(FOLDERS_KEY, migratedFolders);
-      LocalStorageAdapter.setItem(DOCS_KEY, migratedDocs);
+      storage.setItem(FOLDERS_KEY, migratedFolders);
+      storage.setItem(DOCS_KEY, migratedDocs);
 
-      LocalStorageAdapter.setItem(V2_MIGRATION_KEY, true);
+      storage.setItem(V2_MIGRATION_KEY, true);
       console.log('Migration to v2 completed successfully.');
       
     } catch (error) {
