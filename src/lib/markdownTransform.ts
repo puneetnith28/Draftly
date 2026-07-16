@@ -1,5 +1,6 @@
 import { BlockType, ParsedBlock } from '@shared/types';
 import { generateId } from '@shared/utils/idGenerator';
+import { BlockFactory } from '@domain/factories/BlockFactory';
 
 export interface BlockDetection {
   type: BlockType;
@@ -187,21 +188,10 @@ export function parseMarkdownToBlocks(markdown: string): ParsedBlock[] {
 export function blocksToMarkdown(blocks: ParsedBlock[]): string {
   return blocks
     .map((block) => {
-      switch (block.type) {
-        case 'h1': return `# ${block.text}`;
-        case 'h2': return `## ${block.text}`;
-        case 'h3': return `### ${block.text}`;
-        case 'h4': return `#### ${block.text}`;
-        case 'h5': return `##### ${block.text}`;
-        case 'h6': return `###### ${block.text}`;
-        case 'ul': return `- ${block.text}`;
-        case 'ol': return `1. ${block.text}`;
-        case 'quote': return `> ${block.text}`;
-        case 'code': return `\`\`\`\n${block.text}\n\`\`\``;
-        case 'hr': return '---';
-        case 'table': return block.text;
-        default: return block.text;
-      }
+      const entity = BlockFactory.reconstitute(block);
+      // serialize() already appends a newline for blocks, so we trim trailing newlines 
+      // and join them all cleanly at the end.
+      return entity.serialize().replace(/\n$/, ''); 
     })
     .join('\n\n');
 }
