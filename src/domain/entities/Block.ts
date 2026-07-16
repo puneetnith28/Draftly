@@ -16,30 +16,16 @@ export abstract class BlockEntity implements ParsedBlock {
     this.language = data.language;
   }
 
-  /**
-   * Updates the visible text content of the block.
-   */
   public updateText(newText: string): void {
     this.text = newText;
   }
 
-  /**
-   * Updates the block's type (e.g., from 'p' to 'h1').
-   */
   public updateType(newType: BlockType): void {
     this.type = newType;
   }
 
-  /**
-   * Every specific block (Heading, Table, Paragraph) must know how to serialize 
-   * its internal state into a standard Markdown string.
-   * This enforces the Liskov Substitution Principle (LSP).
-   */
   public abstract serialize(): string;
 
-  /**
-   * Protected helper to generate a standardized base payload for new blocks.
-   */
   protected static createBasePayload(type: BlockType, text: string, language?: string): ParsedBlock {
     return {
       id: generateId('b'),

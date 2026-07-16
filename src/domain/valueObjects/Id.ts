@@ -8,10 +8,6 @@ export class Id {
     this.value = value;
   }
 
-  /**
-   * Value Objects are defined by their attributes, not an identity.
-   * Two IDs are equal if their internal string values match.
-   */
   public equals(other: Id): boolean {
     if (other === null || other === undefined) {
       return false;
