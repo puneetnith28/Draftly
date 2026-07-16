@@ -47,6 +47,17 @@ export class LocalStorageFolderRepository implements FolderRepository {
   }
 
   private getAllRaw(): DocumentFolder[] {
-    return this.storage.getItem<DocumentFolder[]>(STORAGE_KEY) || [];
+    const data = this.storage.getItem<any>(STORAGE_KEY);
+    if (data && Array.isArray(data)) return data;
+    
+    // Legacy format check from old notes_documents key
+    const legacyData = this.storage.getItem<any>('notes_documents');
+    if (legacyData && legacyData.folders && Array.isArray(legacyData.folders)) {
+      // Migrate immediately to prevent data loss
+      this.storage.setItem(STORAGE_KEY, legacyData.folders);
+      return legacyData.folders;
+    }
+    
+    return [];
   }
 }

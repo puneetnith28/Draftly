@@ -15,3 +15,9 @@ export function formatBytes(content: string): string {
   if (kb < 1024) return `${kb.toFixed(kb >= 10 ? 0 : 1)} KB`;
   return `${(kb / 1024).toFixed(1)} MB`;
 }
+
+export function getWordCount(content: string): number {
+  const trimmed = content.trim();
+  if (!trimmed) return 0;
+  return trimmed.split(/\s+/).filter(Boolean).length;
+}

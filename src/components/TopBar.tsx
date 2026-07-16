@@ -3,15 +3,16 @@
 import React, { useState, useRef, useCallback } from 'react';
 
 interface TopBarProps {
-  title: string;
-  onTitleChange: (title: string) => void;
+  activeDocId: string | null;
   onMenuToggle: () => void;
   isSidebarOpen?: boolean;
-  wordCount?: number;
   onExport: () => void;
   onPreferences: () => void;
-  savingStatus?: 'idle' | 'saving' | 'saved';
 }
+
+import { useDraftlyEngine } from '../hooks/useDraftlyEngine';
+import { useEngineActiveDocument } from '../hooks/useEngineActiveDocument';
+import { getWordCount } from '@shared/utils/formatters';
 
 function IconMenu() {
   return (
@@ -51,25 +52,27 @@ function IconSettings() {
 }
 
 export function TopBar({
-  title,
-  onTitleChange,
+  activeDocId,
   onMenuToggle,
   isSidebarOpen = false,
-  wordCount = 0,
   onExport,
   onPreferences,
-  savingStatus = 'idle',
 }: TopBarProps) {
+  const engine = useDraftlyEngine();
+  const activeDocument = useEngineActiveDocument(activeDocId);
+  const title = activeDocument?.title ?? '';
+  const wordCount = activeDocument ? getWordCount(activeDocument.content) : 0;
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const titleRef = useRef<HTMLInputElement>(null);
 
   const handleTitleBlur = useCallback(() => {
     setIsEditingTitle(false);
     const val = titleRef.current?.value?.trim();
-    if (val !== undefined) {
-      onTitleChange(val || 'Untitled');
+    if (val !== undefined && activeDocument) {
+      activeDocument.title = val || 'Untitled';
+      engine.documents.updateDocument(activeDocument);
     }
-  }, [onTitleChange]);
+  }, [activeDocument, engine]);
 
   const handleTitleKeyDown = useCallback((e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter') {
@@ -141,21 +144,6 @@ export function TopBar({
           {isSidebarOpen ? <IconChevronLeft /> : <IconMenu />}
         </button>
 
-        {savingStatus !== 'idle' && (
-          <div
-            style={{
-              fontSize: '12px',
-              fontFamily: 'var(--font-ui)',
-              color: savingStatus === 'saving' ? 'var(--text-secondary)' : 'var(--accent)',
-              fontWeight: '500',
-              transition: 'color 0.3s ease',
-              minWidth: '50px',
-            }}
-          >
-            {savingStatus === 'saving' ? 'saving...' : 'saved'}
-          </div>
-        )}
-        
       </div>
 
       <div style={{ display: 'flex', justifyContent: 'center', minWidth: 0, maxWidth: '100%' }}>
