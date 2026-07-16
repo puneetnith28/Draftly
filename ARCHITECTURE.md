@@ -1,6 +1,6 @@
-# Draftly v2 - System Architecture
+# Draftly - System Architecture
 
-This document contains the structural UML diagrams that describe the high-level design of the Draftly v2 application. The architecture strictly adheres to **Clean Architecture**, **SOLID principles**, and proven **Design Patterns** to ensure a decoupled, scalable, and maintainable codebase.
+This document contains the structural UML diagrams that describe the high-level design of the Draftly application. The architecture strictly adheres to **Clean Architecture**, **SOLID principles**, and proven **Design Patterns** to ensure a decoupled, scalable, and maintainable codebase.
 
 ---
 
@@ -18,7 +18,7 @@ graph TD
 
     subgraph Presentation Layer ["Presentation Layer (React UI)"]
         UI[Editor / Sidebar / Topbar]:::presentation
-        Hooks[Custom Hooks (useDraftlyEngine)]:::presentation
+        Hooks["Custom Hooks (useDraftlyEngine)"]:::presentation
     end
 
     subgraph Application Layer ["Application Layer (Services & Facade)"]
