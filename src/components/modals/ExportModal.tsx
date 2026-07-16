@@ -3,12 +3,9 @@
 import React, { useEffect, useRef } from 'react';
 import { Document } from '@shared/types';
 import { ParsedBlock, parseMarkdownToBlocks } from '@/lib/markdownTransform';
-import {
-  exportToMarkdown,
-  exportToPdf,
-  exportToRtf,
-  exportToDocx,
-} from '@/lib/exportUtils';
+import { ExportService } from '@/application/services/ExportService';
+import { DocumentEntity } from '@/domain/entities/Document';
+import { downloadBlob, sanitizeFilename } from '@shared/utils/downloadUtils';
 
 interface ExportModalProps {
   isOpen: boolean;
@@ -86,23 +83,21 @@ export function ExportModal({ isOpen, document, onClose }: ExportModalProps) {
 
   async function handleExport(format: string) {
     if (!document) return;
-    const blocks: ParsedBlock[] = parseMarkdownToBlocks(document.content);
     const title = document.title || 'Untitled';
+    const filename = `${sanitizeFilename(title)}.${format}`;
 
-    switch (format) {
-      case 'md':
-        exportToMarkdown(title, document.content);
-        break;
-      case 'pdf':
-        exportToPdf(title, blocks);
-        break;
-      case 'rtf':
-        exportToRtf(title, blocks);
-        break;
-      case 'docx':
-        await exportToDocx(title, blocks);
-        break;
+    try {
+      const documentEntity = DocumentEntity.reconstitute(document);
+      const exportService = new ExportService();
+      exportService.setStrategy(ExportService.getStrategyByFormat(format));
+      
+      const blob = await exportService.export(documentEntity);
+      downloadBlob(blob, filename);
+    } catch (error) {
+      console.error(`Failed to export as ${format}:`, error);
+      alert(`Export failed. ${error instanceof Error ? error.message : ''}`);
     }
+    
     onClose();
   }
 
