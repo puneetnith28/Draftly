@@ -30,3 +30,13 @@ export interface DocumentFolder {
   createdAt: number;
   updatedAt: number;
 }
+
+export type FontFamily = 'fraunces' | 'inter';
+export type ContentWidth = 'narrow' | 'medium' | 'wide';
+export type ColorTheme = 'light' | 'dark' | 'sepia';
+
+export interface Preferences {
+  font: FontFamily;
+  width: ContentWidth;
+  theme: ColorTheme;
+}
