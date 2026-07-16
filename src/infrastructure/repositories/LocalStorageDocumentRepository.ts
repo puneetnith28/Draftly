@@ -47,6 +47,25 @@ export class LocalStorageDocumentRepository implements DocumentRepository {
   }
 
   private getAllRaw(): IDocument[] {
-    return this.storage.getItem<IDocument[]>(STORAGE_KEY) || [];
+    const data = this.storage.getItem<any>(STORAGE_KEY);
+    if (!data) return [];
+    if (Array.isArray(data)) return data;
+    
+    // Legacy format support: { documents: [...], folders: [...] }
+    if (data.documents && Array.isArray(data.documents)) {
+      // Safely migrate folders if they exist to the new key to prevent data loss
+      if (data.folders && Array.isArray(data.folders)) {
+         const existingFolders = this.storage.getItem<any>('notes_folders');
+         if (!existingFolders) {
+            this.storage.setItem('notes_folders', data.folders);
+         }
+      }
+      
+      // Migrate documents to be an array natively
+      this.storage.setItem(STORAGE_KEY, data.documents);
+      
+      return data.documents;
+    }
+    return [];
   }
 }

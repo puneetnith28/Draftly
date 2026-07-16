@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useRef, useState } from 'react';
-import { FOLDER_COLOR_OPTIONS } from '@/hooks/useDocuments';
+import { FOLDER_COLOR_OPTIONS } from '@/shared/utils/constants';
 
 interface NewFolderModalProps {
   isOpen: boolean;

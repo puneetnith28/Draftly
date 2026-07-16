@@ -1,7 +1,9 @@
 'use client';
 
 import React, { useState, useCallback, useEffect, useRef } from 'react';
-import { useDocuments } from '@/hooks/useDocuments';
+import { useDraftlyEngine } from '@/hooks/useDraftlyEngine';
+import { useEngineNavigation } from '@/hooks/useEngineNavigation';
+import { useEngineActiveDocument } from '@/hooks/useEngineActiveDocument';
 import { usePreferences } from '@/hooks/usePreferences';
 import { Editor } from '@/components/Editor/Editor';
 import { TopBar } from '@/components/TopBar';
@@ -12,44 +14,29 @@ import { InstallPwaButton } from '@/components/InstallPwaButton';
 import { registerServiceWorker, unregisterServiceWorker } from '@/lib/serviceWorkerRegistration';
 import { Sidebar } from '@/components/Sidebar';
 
-function useDebouncedCallback<T extends (...args: never[]) => void>(
-  fn: T,
-  delay: number
-): T {
-  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  return useCallback(
-    ((...args: Parameters<T>) => {
-      if (timer.current) clearTimeout(timer.current);
-      timer.current = setTimeout(() => fn(...args), delay);
-    }) as T,
-    [fn, delay]
-  );
-}
-
-function getWordCount(content: string): number {
-  const trimmed = content.trim();
-  if (!trimmed) return 0;
-  return trimmed.split(/\s+/).filter(Boolean).length;
-}
-
 export default function NotesApp() {
-  const {
-    documents,
-    folders,
-    activeDocument,
-    activeDocId,
-    isLoaded,
-    updateDocument,
-    createDocument,
-    openDocument,
-    deleteDocument,
-    createFolder,
-    renameFolder,
-    updateFolder,
-    reorderFolders,
-    reorderDocuments,
-    deleteFolder,
-  } = useDocuments();
+  const engine = useDraftlyEngine();
+  const { folders } = useEngineNavigation();
+  const [activeDocId, setActiveDocId] = useState<string | null>(null);
+  const activeDocument = useEngineActiveDocument(activeDocId);
+  const openDocument = useCallback((id: string) => setActiveDocId(id), []);
+  const [isLoaded, setIsLoaded] = useState(false);
+
+  useEffect(() => {
+    let mounted = true;
+    engine.documents.getAllDocuments().then((docs) => {
+      if (!mounted) return;
+      if (docs.length > 0) {
+        setActiveDocId(docs[0].id);
+      } else {
+        engine.documents.createDocument('Untitled', null).then((newDoc) => {
+          if (mounted) setActiveDocId(newDoc.id);
+        });
+      }
+      setIsLoaded(true);
+    });
+    return () => { mounted = false; };
+  }, [engine]);
 
   const {
     preferences,
@@ -66,9 +53,7 @@ export default function NotesApp() {
   const [parentFolderId, setParentFolderId] = useState<string | null>(null);
   const [prefsOpen, setPrefsOpen] = useState(false);
   const [isMobileViewport, setIsMobileViewport] = useState(false);
-  const [savingStatus, setSavingStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
-  const savingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-
+  
   useEffect(() => {
     if (process.env.NODE_ENV === 'production') {
       registerServiceWorker();
@@ -86,43 +71,11 @@ export default function NotesApp() {
     return () => media.removeEventListener('change', update);
   }, []);
 
-  const debouncedSave = useDebouncedCallback(
-    (id: string, content: string) => {
-      setSavingStatus('saving');
-      updateDocument(id, { content });
-      setSavingStatus('saved');
-      if (savingTimeoutRef.current) clearTimeout(savingTimeoutRef.current);
-      savingTimeoutRef.current = setTimeout(() => {
-        setSavingStatus('idle');
-      }, 1500);
-    },
-    400
-  );
-
-  const handleContentChange = useCallback(
-    (markdown: string) => {
-      if (!activeDocId) return;
-      setSavingStatus('saving');
-      debouncedSave(activeDocId, markdown);
-    },
-    [activeDocId, debouncedSave]
-  );
-
-  const handleTitleChange = useCallback(
-    (title: string) => {
-      if (!activeDocId) return;
-      updateDocument(activeDocId, { title });
-    },
-    [activeDocId, updateDocument]
-  );
-
-  const handleExportDoc = useCallback(() => {
+        const handleExportDoc = useCallback(() => {
     setExportOpen(true);
   }, []);
 
-  const activeWordCount = activeDocument ? getWordCount(activeDocument.content) : 0;
-
-  const handleSidebarExport = useCallback(
+    const handleSidebarExport = useCallback(
     (id: string) => {
       openDocument(id);
       setExportOpen(true);
@@ -169,14 +122,9 @@ export default function NotesApp() {
       <Sidebar
         isOpen={sidebarOpen}
         isMobile={isMobileViewport}
-        documents={documents}
-        folders={folders}
         activeDocId={activeDocId}
         onClose={() => setSidebarOpen(false)}
         onOpen={openDocument}
-        onCreate={(folderId: string | null | undefined) => {
-          createDocument(folderId ?? null);
-        }}
         onCreateFolder={(parentId?: string | null) => {
           setEditingFolderId(null);
           setParentFolderId(parentId ?? null);
@@ -186,9 +134,6 @@ export default function NotesApp() {
           setEditingFolderId(id);
           setNewFolderOpen(true);
         }}
-        onReorderFolders={reorderFolders}
-        onReorderDocuments={reorderDocuments}
-        onDelete={deleteDocument}
         onExport={handleSidebarExport}
       />
 
@@ -203,14 +148,11 @@ export default function NotesApp() {
         }}
       >
         <TopBar
-          title={activeDocument?.title ?? 'Untitled'}
-          onTitleChange={handleTitleChange}
+          activeDocId={activeDocId}
           onMenuToggle={() => setSidebarOpen((v) => !v)}
           isSidebarOpen={sidebarOpen}
-          wordCount={activeWordCount}
           onExport={handleExportDoc}
           onPreferences={() => setPrefsOpen(true)}
-          savingStatus={savingStatus}
         />
 
         {activeDocument && (
@@ -220,7 +162,6 @@ export default function NotesApp() {
             contentWidth={contentWidthPx}
             fontCss={fontCss}
             sidebarOffset={!isMobileViewport && sidebarOpen ? 300 : 0}
-            onChange={handleContentChange}
           />
         )}
       </div>
@@ -239,9 +180,16 @@ export default function NotesApp() {
         onClose={() => setNewFolderOpen(false)}
         onSubmit={(name, color) => {
           if (editingFolderId) {
-            updateFolder(editingFolderId, { name, color });
+            const folder = folders.find(f => f.id === editingFolderId);
+            if (folder) {
+              // Create a clone to safely pass to the engine without mutating React state directly
+              const updatedFolder = Object.assign(Object.create(Object.getPrototypeOf(folder)), folder);
+              updatedFolder.name = name;
+              updatedFolder.color = color;
+              engine.folders.updateFolder(updatedFolder);
+            }
           } else {
-            createFolder(name, color, parentFolderId);
+            engine.folders.createFolder(name, color, parentFolderId);
           }
           setNewFolderOpen(false);
         }}
@@ -252,7 +200,7 @@ export default function NotesApp() {
             `Delete folder "${folder.name}"? Documents and subfolders in it will move to its parent level.`
           );
           if (!confirmed) return;
-          deleteFolder(editingFolderId);
+          engine.folders.deleteFolder(editingFolderId);
           setNewFolderOpen(false);
         } : undefined}
       />

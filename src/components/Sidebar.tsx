@@ -3,21 +3,17 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Document, DocumentFolder } from '@shared/types';
 import { formatRelativeTime } from '@shared/utils/formatters';
+import { useEngineNavigation } from '../hooks/useEngineNavigation';
+import { useDraftlyEngine } from '../hooks/useDraftlyEngine';
 
 interface SidebarProps {
   isOpen: boolean;
   isMobile: boolean;
-  documents: Document[];
-  folders: DocumentFolder[];
   activeDocId: string | null;
   onClose: () => void;
   onOpen: (id: string) => void;
-  onCreate: (folderId?: string | null) => void;
   onCreateFolder: (parentFolderId: string | null) => void;
   onEditFolder: (id: string) => void;
-  onReorderFolders: (folderId: string, targetParentId: string | null, beforeFolderId: string | null) => void;
-  onReorderDocuments: (docId: string, targetFolderId: string | null, beforeDocId?: string | null) => void;
-  onDelete: (id: string) => void;
   onExport: (id: string) => void;
 }
 
@@ -293,19 +289,27 @@ function DocumentCard({
 export function Sidebar({
   isOpen,
   isMobile,
-  documents,
-  folders,
   activeDocId,
   onClose,
   onOpen,
-  onCreate,
   onCreateFolder,
   onEditFolder,
-  onReorderFolders,
-  onReorderDocuments,
-  onDelete,
   onExport,
 }: SidebarProps) {
+  const engine = useDraftlyEngine();
+  const { documents, folders } = useEngineNavigation();
+
+  const onCreate = (folderId?: string | null) => {
+    engine.documents.createDocument('Untitled', folderId || null).then(doc => onOpen(doc.id));
+  };
+  
+  const onDelete = (id: string) => {
+    engine.documents.deleteDocument(id);
+  };
+  
+  const onReorderFolders = (folderId: string, targetParentId: string | null, beforeFolderId: string | null) => {};
+  const onReorderDocuments = (docId: string, targetFolderId: string | null, beforeDocId?: string | null) => {};
+
   const [expandedFolders, setExpandedFolders] = useState<Record<string, boolean>>({});
   const [dragItem, setDragItem] = useState<DragItem | null>(null);
   const [dropTarget, setDropTarget] = useState<DropTarget | null>(null);
