@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useRef } from 'react';
-import { Document } from '@/hooks/useDocuments';
+import { Document } from '@shared/types';
 import { ParsedBlock, parseMarkdownToBlocks } from '@/lib/markdownTransform';
 import {
   exportToMarkdown,
