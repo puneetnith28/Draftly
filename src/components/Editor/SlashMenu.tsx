@@ -5,6 +5,7 @@ import {
   Heading1, Heading2, Heading3, Type, List, ListOrdered,
   Quote, Code, Table, Minus
 } from 'lucide-react';
+import { SlashMenuRegistry } from './BlockRegistry';
 
 export interface SlashMenuItem {
   type: string;
@@ -45,6 +46,12 @@ export function SlashMenu({
     { type: 'code', label: 'Code block', desc: 'Syntax highlighted code', icon: <Code size={16} /> },
     { type: 'table', label: 'Table', desc: 'Data table grid', icon: <Table size={16} /> },
     { type: 'hr', label: 'Divider', desc: 'Horizontal line break', icon: <Minus size={16} /> },
+    ...Array.from(SlashMenuRegistry.entries()).map(([type, val]) => ({
+      type,
+      label: val.label,
+      desc: 'Plugin Block',
+      icon: <span style={{ fontSize: '14px' }}>{val.icon}</span>,
+    })),
   ], []);
 
   const filtered = useMemo(() => {

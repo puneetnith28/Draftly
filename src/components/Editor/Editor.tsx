@@ -595,6 +595,15 @@ export function Editor({ docId, content, contentWidth, fontCss, sidebarOffset}: 
     [focusedBlockId, getSelectedBlockId, applyBlocksChange]
   );
 
+  const handleBlockUpdate = useCallback(
+    (blockId: string, updates: Partial<ParsedBlock>) => {
+      applyBlocksChange((prev) =>
+        prev.map((b) => (b.id === blockId ? { ...b, ...updates } : b))
+      );
+    },
+    [applyBlocksChange]
+  );
+
   const applyInlineFormat = useCallback((format: string) => {
     const sel = window.getSelection();
     if (!sel || sel.rangeCount === 0) return;
@@ -1069,7 +1078,7 @@ export function Editor({ docId, content, contentWidth, fontCss, sidebarOffset}: 
         >
           {blocksWithOrdinals.map(({ block, listOrdinal }, idx: number) => (
             <EditorBlock
-              key={block.id}
+              key={`${block.id}-${block.type}`}
               block={block}
               isFirst={idx === 0}
               isFocused={focusedBlockId === block.id}
@@ -1079,6 +1088,7 @@ export function Editor({ docId, content, contentWidth, fontCss, sidebarOffset}: 
               onFocus={setFocusedBlockId}
               onBlur={handleBlockBlur}
               onTextChange={handleTextChange}
+              onBlockUpdate={handleBlockUpdate}
               onEnter={handleEnter}
               onBackspaceEmpty={handleBackspaceOnEmpty}
               onBackspaceJoinPrevious={mergeBlockWithPrevious}

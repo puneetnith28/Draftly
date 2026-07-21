@@ -2,6 +2,7 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { ParsedBlock } from '@shared/types';
+import { SlashMenuRegistry } from './BlockRegistry';
 
 interface FloatingToolbarProps {
   focusedBlockId: string | null;
@@ -262,6 +263,11 @@ export function FloatingToolbar({ focusedBlockId, blocks, sidebarOffset, onActio
     p: 'Text', h1: 'H1', h2: 'H2', h3: 'H3', h4: 'H4', h5: 'H5', h6: 'H6',
     ul: 'List', ol: 'Ordered', quote: 'Quote', code: 'Code', table: 'Table', hr: 'Rule',
   };
+  
+  SlashMenuRegistry.forEach((val, key) => {
+    blockTypeLabels[key] = val.label;
+  });
+
   const currentLabel = blockTypeLabels[currentType] ?? 'Text';
   const showExtendedMobileActions = true;
 
@@ -391,6 +397,9 @@ export function FloatingToolbar({ focusedBlockId, blocks, sidebarOffset, onActio
                 { type: 'ul', label: 'Bullet list', desc: 'Unordered list' },
                 { type: 'ol', label: 'Numbered list', desc: 'Ordered list' },
                 { type: 'code', label: 'Code block', desc: 'Monospace code' },
+                ...Array.from(SlashMenuRegistry.entries()).map(([key, val]) => ({
+                  type: key, label: val.label, desc: val.icon
+                }))
               ] as { type: string; label: string; desc: string }[]).map((item) => (
                 <button
                   key={item.type}
@@ -621,6 +630,9 @@ export function FloatingToolbar({ focusedBlockId, blocks, sidebarOffset, onActio
             { type: 'ul', label: 'Bullet list', desc: 'Unordered list' },
             { type: 'ol', label: 'Numbered list', desc: 'Ordered list' },
             { type: 'code', label: 'Code block', desc: 'Monospace code' },
+            ...Array.from(SlashMenuRegistry.entries()).map(([key, val]) => ({
+              type: key, label: val.label, desc: val.icon
+            }))
           ] as { type: string; label: string; desc: string }[]).map((item) => (
             <button
               key={item.type}

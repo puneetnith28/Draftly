@@ -14,6 +14,8 @@ import { ExportService } from '@application/services/ExportService';
 import { DraftlyEngine } from '@application/facades/DraftlyEngine';
 import { AutoSaveObserver } from '@application/observers/AutoSaveObserver';
 import { SearchIndexerObserver } from '@application/observers/SearchIndexerObserver';
+import { PluginManager } from '../../lib/plugins/PluginManager';
+import { KanbanPlugin } from '../../plugins/kanban/KanbanPlugin';
 
 export interface DIContainer {
   documentRepository: DocumentRepository;
@@ -58,6 +60,9 @@ class Container implements DIContainer {
 
     const searchIndexerObserver = new SearchIndexerObserver(eventBus, searchService);
     searchIndexerObserver.startListening();
+
+    // Initialize plugins
+    PluginManager.registerPlugin(new KanbanPlugin());
 
     // Fire initial initialization
     this.engine.initialize();

@@ -6,6 +6,8 @@ import { DocxExportStrategy } from '@domain/strategies/DocxExportStrategy';
 import { RtfExportStrategy } from '@domain/strategies/RtfExportStrategy';
 
 export class ExportService {
+  private static customStrategies = new Map<string, ExportStrategy>();
+
   private strategy: ExportStrategy;
 
   constructor(strategy?: ExportStrategy) {
@@ -20,7 +22,15 @@ export class ExportService {
     return this.strategy.export(document);
   }
 
+  public static registerStrategy(format: string, strategy: ExportStrategy) {
+    this.customStrategies.set(format, strategy);
+  }
+
   public static getStrategyByFormat(format: string): ExportStrategy {
+    if (this.customStrategies.has(format)) {
+      return this.customStrategies.get(format)!;
+    }
+
     switch (format) {
       case 'pdf':
         return new PdfExportStrategy();
