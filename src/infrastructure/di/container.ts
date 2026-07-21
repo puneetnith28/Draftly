@@ -1,7 +1,7 @@
 import { DocumentRepository } from '@domain/repositories/DocumentRepository';
 import { FolderRepository } from '@domain/repositories/FolderRepository';
-import { LocalStorageDocumentRepository } from '@infrastructure/repositories/LocalStorageDocumentRepository';
-import { LocalStorageFolderRepository } from '@infrastructure/repositories/LocalStorageFolderRepository';
+import { SupabaseDocumentRepository } from '@infrastructure/repositories/SupabaseDocumentRepository';
+import { SupabaseFolderRepository } from '@infrastructure/repositories/SupabaseFolderRepository';
 import { LocalStorageAdapter } from '@infrastructure/storage/LocalStorageAdapter';
 
 import { GlobalEventBus } from '@application/events/GlobalEventBus';
@@ -21,6 +21,7 @@ export interface DIContainer {
   documentRepository: DocumentRepository;
   folderRepository: FolderRepository;
   engine: DraftlyEngine;
+  setAuthToken(getTokenFn: () => Promise<string | null>, userId?: string | null): void;
 }
 
 class Container implements DIContainer {
@@ -29,9 +30,9 @@ class Container implements DIContainer {
   public engine: DraftlyEngine;
 
   constructor() {
+    this.documentRepository = new SupabaseDocumentRepository();
+    this.folderRepository = new SupabaseFolderRepository();
     const storageAdapter = new LocalStorageAdapter();
-    this.documentRepository = new LocalStorageDocumentRepository(storageAdapter);
-    this.folderRepository = new LocalStorageFolderRepository(storageAdapter);
 
     const eventBus = GlobalEventBus.getInstance();
 
@@ -66,6 +67,14 @@ class Container implements DIContainer {
 
     // Fire initial initialization
     this.engine.initialize();
+  }
+  public setAuthToken(getTokenFn: () => Promise<string | null>, userId?: string | null): void {
+    if ('setAuthToken' in this.documentRepository) {
+      (this.documentRepository as any).setAuthToken(getTokenFn, userId);
+    }
+    if ('setAuthToken' in this.folderRepository) {
+      (this.folderRepository as any).setAuthToken(getTokenFn, userId);
+    }
   }
 }
 

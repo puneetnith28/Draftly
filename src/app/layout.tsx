@@ -1,5 +1,8 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
+import { ClerkProvider } from '@clerk/nextjs'
+import { auth } from '@clerk/nextjs/server'
+import { AuthSync } from '../components/AuthSync';
 import "./globals.css";
 
 const geistSans = Geist({
@@ -26,17 +29,29 @@ export const metadata: Metadata = {
   },
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const { userId } = await auth();
+  if (!userId) {
+    // If not signed in, clerk will handle it (redirect to sign in) or we can call protect()
+    await auth.protect();
+  }
+
   return (
-    <html
-      lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
-    >
-      <body className="min-h-full flex flex-col">{children}</body>
-    </html>
+    <ClerkProvider>
+      <html
+        lang="en"
+        className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      >
+        <body className="min-h-full flex flex-col">
+          <AuthSync>
+            {children}
+          </AuthSync>
+        </body>
+      </html>
+    </ClerkProvider>
   );
 }
