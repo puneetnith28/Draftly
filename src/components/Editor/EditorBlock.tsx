@@ -12,6 +12,7 @@ import React, {
 import hljs from 'highlight.js/lib/common';
 import { parseInlineMarkdown, parseTableMarkdown, detectBlockType } from '@/lib/markdownTransform';
 import { ParsedBlock, BlockType } from '@shared/types';
+import { BlockRegistry } from './BlockRegistry';
 
 interface EditorBlockProps {
   block: ParsedBlock;
@@ -23,6 +24,7 @@ interface EditorBlockProps {
   onFocus: (id: string) => void;
   onBlur: (id: string) => void;
   onTextChange: (id: string, text: string) => void;
+  onBlockUpdate?: (id: string, updates: Partial<ParsedBlock>) => void;
   onEnter: (id: string, currentText: string, caretOffset: number) => void;
   onBackspaceEmpty: (id: string) => void;
   onBackspaceJoinPrevious: (id: string) => void;
@@ -224,6 +226,7 @@ export const EditorBlock = React.memo(function EditorBlock({
   onFocus,
   onBlur,
   onTextChange,
+  onBlockUpdate,
   onEnter,
   onBackspaceEmpty,
   onBackspaceJoinPrevious,
@@ -429,6 +432,44 @@ export const EditorBlock = React.memo(function EditorBlock({
       sel?.addRange(range);
     } catch { /* ignore */ }
   }, [isFocused, block.id, renderedHtml, block.type]);
+
+  if (BlockRegistry.has(block.type)) {
+    const CustomComponent = BlockRegistry.get(block.type)!;
+    const wrapperClassName = `editor-block-wrapper${isFocused ? ' is-focused' : ''}${isHovered ? ' is-hovered' : ''}${isDragging ? ' is-dragging' : ''}${dropPosition === 'top' ? ' drop-top' : ''}${dropPosition === 'bottom' ? ' drop-bottom' : ''}`;
+    return (
+      <div
+        className={wrapperClassName}
+        onMouseEnter={() => setIsHovered(true)}
+        onMouseLeave={() => setIsHovered(false)}
+        draggable={isDraggable}
+        onDragStart={handleDragStart}
+        onDragEnd={handleDragEnd}
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
+        onDrop={handleDrop}
+      >
+        <BlockGutter
+          blockType={block.type} isHovered={isHovered} isFocused={isFocused}
+          blockIndex={blockIndex} totalBlocks={totalBlocks} listOrdinal={null}
+          showMenu={showMenu} setShowMenu={setShowMenu} menuRef={menuRef}
+          onMoveUp={() => onMoveBlock(block.id, 'up')}
+          onMoveDown={() => onMoveBlock(block.id, 'down')}
+          onDelete={() => onDeleteBlock(block.id)}
+          onMouseEnterHandle={() => setIsDraggable(true)}
+          onMouseLeaveHandle={() => { if (!isDragging) setIsDraggable(false); }}
+        />
+        <div style={{ paddingLeft: '1.5rem', width: '100%' }}>
+          <CustomComponent 
+             block={block} 
+             onTextChange={(text: string) => onTextChange(block.id, text)} 
+             onBlockUpdate={(updates: Partial<ParsedBlock>) => onBlockUpdate?.(block.id, updates)}
+             isFocused={isFocused} 
+             onFocus={() => onFocus(block.id)} 
+          />
+        </div>
+      </div>
+    );
+  }
 
   if (block.type === 'table') {
     return (

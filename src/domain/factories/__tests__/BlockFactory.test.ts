@@ -36,4 +36,24 @@ describe('BlockFactory', () => {
     expect(block).toBeInstanceOf(TableBlock);
     expect(block.type).toBe('table');
   });
+
+  it('should support dynamic registration of custom blocks via plugins', () => {
+    class CustomBlock extends ParagraphBlock {
+      constructor(data: any) { super(data); }
+    }
+    
+    BlockFactory.registerCustomBlockType(
+      'custom-plugin',
+      (text: string) => new CustomBlock({ id: '1', type: 'custom-plugin', text, raw: text }),
+      (data: any) => new CustomBlock(data)
+    );
+
+    const block = BlockFactory.createNew('custom-plugin', 'Dynamic Block');
+    expect(block).toBeInstanceOf(CustomBlock);
+    expect(block.type).toBe('custom-plugin');
+
+    const reconstituted = BlockFactory.reconstitute({ id: '2', type: 'custom-plugin', text: 'Res', raw: 'Res' });
+    expect(reconstituted).toBeInstanceOf(CustomBlock);
+    expect(reconstituted.type).toBe('custom-plugin');
+  });
 });

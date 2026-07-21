@@ -1,7 +1,4 @@
-export type BlockType =
-  | 'h1' | 'h2' | 'h3' | 'h4' | 'h5' | 'h6'
-  | 'ul' | 'ol' | 'quote' | 'code' | 'hr'
-  | 'table' | 'p';
+export type BlockType = string;
 
 export interface ParsedBlock {
   id: string;
@@ -9,6 +6,7 @@ export interface ParsedBlock {
   text: string;
   raw: string;
   language?: string;
+  metadata?: Record<string, any>;
 }
 
 export interface Document {
