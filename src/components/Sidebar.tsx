@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useEffect, useMemo, useState } from 'react';
+import { UserButton, SignInButton, useAuth } from '@clerk/nextjs';
 import { Document, DocumentFolder } from '@shared/types';
 import { formatRelativeTime } from '@shared/utils/formatters';
 import { useEngineNavigation } from '../hooks/useEngineNavigation';
@@ -296,6 +297,7 @@ export function Sidebar({
   onEditFolder,
   onExport,
 }: SidebarProps) {
+  const { isSignedIn } = useAuth();
   const engine = useDraftlyEngine();
   const { documents, folders } = useEngineNavigation();
 
@@ -777,6 +779,43 @@ export function Sidebar({
           style={{
             padding: '10px 12px',
             borderTop: '1px solid var(--border-default)',
+            background: 'color-mix(in srgb, var(--bg-sidebar) 88%, var(--bg-modal) 12%)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            fontFamily: 'var(--font-ui)',
+            fontSize: '13px',
+            color: 'var(--text-primary)',
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            {isSignedIn ? (
+              <>
+                <UserButton />
+                <span style={{ fontSize: '12px', fontWeight: '500' }}>Account</span>
+              </>
+            ) : (
+              <SignInButton mode="modal">
+                <button style={{
+                  background: 'var(--accent)',
+                  color: 'white',
+                  border: 'none',
+                  padding: '6px 12px',
+                  borderRadius: '6px',
+                  cursor: 'pointer',
+                  fontWeight: '500',
+                  fontSize: '12px'
+                }}>
+                  Sign In
+                </button>
+              </SignInButton>
+            )}
+          </div>
+        </div>
+
+        <div
+          style={{
+            padding: '10px 12px',
             background: 'color-mix(in srgb, var(--bg-sidebar) 88%, var(--bg-modal) 12%)',
             color: 'var(--text-secondary)',
             fontFamily: 'var(--font-ui)',
